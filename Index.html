@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Invent Health • 837 Risk Analyzer</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <!-- Top header -->
+  <header class="topbar">
+    <button class="iconBtn" id="btnToggleSidebar" title="Menu" aria-label="Menu">☰</button>
+    <div class="topTitle">
+      <div class="topTitleMain">837 Risk Analyzer</div>
+      <div class="topTitleSub">837 Ingestion → Validations → Fixes → Workflow → Reports → CCD/Docs</div>
+    </div>
+
+    <div class="topRight">
+      <button class="iconBtn" id="btnOpenNotifications" title="Notifications" aria-label="Notifications">🔔</button>
+      <div class="avatar">ST</div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <img id="logoImg" alt="Invent Health" />
+        <div class="brandText">
+          <div class="brandName">INVENT HEALTH</div>
+          <div class="brandTag">Risk Adjustment • AI + NLP</div>
+        </div>
+      </div>
+
+      <div class="navGroup">
+        <div class="navLabel">Workspace</div>
+
+        <button class="navItem tab active" data-tab="ingestion">
+          <span class="navIcon">⬆️</span>
+          <span>837 Ingestion</span>
+        </button>
+
+        <button class="navItem tab" data-tab="runs">
+          <span class="navIcon">📄</span>
+          <span>Runs</span>
+        </button>
+
+        <button class="navItem tab" data-tab="workqueue">
+          <span class="navIcon">✅</span>
+          <span>Workqueue</span>
+        </button>
+
+        <button class="navItem tab" data-tab="docs">
+          <span class="navIcon">📎</span>
+          <span>CCD / Docs</span>
+        </button>
+
+        <button class="navItem tab" data-tab="reports">
+          <span class="navIcon">📊</span>
+          <span>Reports</span>
+        </button>
+      </div>
+
+      <div class="navGroup">
+        <div class="navLabel">Admin</div>
+
+        <button class="navItem tab" data-tab="config">
+          <span class="navIcon">⚙️</span>
+          <span>Configurations</span>
+        </button>
+
+        <button class="navItem tab" data-tab="audit">
+          <span class="navIcon">🧾</span>
+          <span>Audit</span>
+        </button>
+      </div>
+
+      <div class="navFooter">
+        <div class="hint">Demo uses localStorage. No backend required.</div>
+        <button class="btn danger full" id="btnResetAll">Reset Demo</button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+
+      <!-- INGESTION -->
+      <section class="tabPane active" id="tab-ingestion">
+        <div class="pageHeader">
+          <div>
+            <h1>837 Ingestion</h1>
+            <p class="sub">Load multiple 837s (Professional + Institutional), validate for RA rejections, apply safe fixes, create workflow actions.</p>
+          </div>
+          <div class="pageActions">
+            <button class="btn" id="btnLoadProSamples">Load Pro Samples</button>
+            <button class="btn" id="btnLoadInstSamples">Load Inst Samples</button>
+            <button class="btn primary" id="btnRunBatch">Run Validation</button>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi">
+            <div class="kpiIcon">📥</div>
+            <div>
+              <div class="kpiValue" id="kpiRuns">0</div>
+              <div class="kpiLabel">Runs</div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="kpiIcon">🛠️</div>
+            <div>
+              <div class="kpiValue" id="kpiRepairs">0</div>
+              <div class="kpiLabel">Errors Fixed</div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="kpiIcon">⛔</div>
+            <div>
+              <div class="kpiValue" id="kpiRABlocks">0</div>
+              <div class="kpiLabel">RA Blocks</div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="kpiIcon">✅</div>
+            <div>
+              <div class="kpiValue" id="kpiActions">0</div>
+              <div class="kpiLabel">Workflow Actions</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <h2>Load 837 Files</h2>
+            <div class="hint">Upload multiple files (TXT/EDI). Each will be processed as a separate run.</div>
+          </div>
+          <div class="cardBody">
+            <div class="row">
+              <input type="file" id="file837" multiple />
+            </div>
+            <div class="row">
+              <div id="loadedList" class="loadedList"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row actionsRow">
+          <button class="btn primary" id="btnCreateActions">Create Work Actions</button>
+          <div class="hint">Creates tasks: RA rejections, non-risk eligible CPT, pharmacy-only, POS/provider fixes, and prospective gaps (amputation/transplant/dialysis status).</div>
+        </div>
+      </section>
+
+      <!-- RUNS -->
+      <section class="tabPane" id="tab-runs">
+        <div class="pageHeader">
+          <div>
+            <h1>Runs</h1>
+            <p class="sub">Before vs After highlighting, findings, and audit-ready repair summaries.</p>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="cardHead">
+              <h2>Recent Runs</h2>
+            </div>
+            <div class="cardBody" id="runsTable"></div>
+          </div>
+
+          <div class="card">
+            <div class="cardHead">
+              <h2>Run Detail</h2>
+              <div class="pillRow">
+                <span id="runStatusPill" class="pill">—</span>
+                <span id="runStepPill" class="pill pillSoft">—</span>
+                <button class="btn" id="btnDownloadAfter">Download “After”</button>
+              </div>
+            </div>
+
+            <div class="cardBody">
+              <div id="runMeta" class="hint">Select a run</div>
+
+              <h3 class="mt16">Findings</h3>
+              <div id="findingsTable"></div>
+
+              <h3 class="mt16">Repairs Applied</h3>
+              <div id="repairsTable"></div>
+
+              <h3 class="mt16">Before vs After</h3>
+              <div class="diffGrid">
+                <div>
+                  <div class="diffLabel">Before</div>
+                  <pre class="codeBox" id="beforeBox"></pre>
+                </div>
+                <div>
+                  <div class="diffLabel">After</div>
+                  <pre class="codeBox" id="afterBox"></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WORKQUEUE -->
+      <section class="tabPane" id="tab-workqueue">
+        <div class="pageHeader">
+          <div>
+            <h1>Workqueue</h1>
+            <p class="sub">Auto-created actions routed to Risk Adjustment team. Trigger Slack/Teams/tickets and provider queries.</p>
+          </div>
+          <div class="pageActions">
+            <select id="actionFilter" class="select">
+              <option value="all">All</option>
+              <option value="NEW">NEW</option>
+              <option value="IN_REVIEW">IN_REVIEW</option>
+              <option value="SENT_TO_PROVIDER">SENT_TO_PROVIDER</option>
+              <option value="CLOSED">CLOSED</option>
+            </select>
+
+            <select id="assignTo" class="select">
+              <option>Risk Adjustment Team</option>
+              <option>Provider Engagement</option>
+              <option>Claims Ops</option>
+              <option>Coding QA</option>
+            </select>
+
+            <select id="actionScope" class="select">
+              <option value="fatal_ra">Create actions: FATAL + RA_BLOCK</option>
+              <option value="all">Create actions: ALL findings</option>
+              <option value="ra_only">Create actions: RA_BLOCK only</option>
+              <option value="fatal_only">Create actions: FATAL only</option>
+            </select>
+
+            <button class="btn primary" id="btnCreateActions2">Create Work Actions</button>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="cardHead">
+              <h2>Actions</h2>
+            </div>
+            <div class="cardBody" id="actionsTable"></div>
+          </div>
+
+          <div class="card">
+            <div class="cardHead">
+              <h2>Action Detail</h2>
+              <div class="hint">Update status, attach docs, notify Slack/Teams, create tickets, provider query.</div>
+            </div>
+
+            <div class="cardBody">
+              <div id="actionEmpty" class="empty">Select an action to view details.</div>
+
+              <div id="actionDetail" style="display:none">
+                <div class="adTitle" id="adTitle">—</div>
+                <div class="adMeta" id="adMeta">—</div>
+                <div class="pillRow">
+                  <span class="pill" id="adStatusPill">—</span>
+                </div>
+
+                <div class="row mt12">
+                  <label>Status</label>
+                  <select id="adStatus" class="select">
+                    <option>NEW</option>
+                    <option>IN_REVIEW</option>
+                    <option>SENT_TO_PROVIDER</option>
+                    <option>CLOSED</option>
+                  </select>
+                </div>
+
+                <div class="row">
+                  <label>Priority</label>
+                  <select id="adPriority" class="select">
+                    <option>P0</option>
+                    <option>P1</option>
+                    <option>P2</option>
+                  </select>
+                </div>
+
+                <div class="row">
+                  <label>Notes</label>
+                  <textarea id="adNotes" class="textarea" rows="4" placeholder="Add notes for the RA team or provider query..."></textarea>
+                </div>
+
+                <div class="row mt8">
+                  <button class="btn primary" id="btnSaveAction">Save</button>
+                  <button class="btn" id="btnNotifySlack">Notify Slack (demo)</button>
+                  <button class="btn" id="btnNotifyTeams">Notify Teams (demo)</button>
+                  <button class="btn" id="btnCreateTicket">Create Ticket (demo)</button>
+                </div>
+
+                <div class="row mt8">
+                  <button class="btn" id="btnProviderQuery">Provider Query Template</button>
+                  <button class="btn" id="btnRetrieveCCD">Retrieve CCD (demo)</button>
+                </div>
+
+                <div class="row mt12">
+                  <label>Attach docs to action</label>
+                  <input type="file" id="docUpload" multiple />
+                </div>
+
+                <div class="mt12">
+                  <h3>Attached Docs</h3>
+                  <div id="attachedDocs"></div>
+                </div>
+
+                <div class="mt12">
+                  <h3>Integration Payload Preview</h3>
+                  <pre class="codeBox" id="actionPayload"></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DOCS -->
+      <section class="tabPane" id="tab-docs">
+        <div class="pageHeader">
+          <div>
+            <h1>CCD / Docs</h1>
+            <p class="sub">Demo: retrieve CCDs and attach clinical documentation for prospective coding.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <h2>Document Library</h2>
+            <div class="hint">Add docs by member or simulate CCD retrieval.</div>
+          </div>
+          <div class="cardBody">
+            <div class="row">
+              <label>Member ID</label>
+              <input class="input" id="docMemberId" placeholder="e.g., W123456789" />
+            </div>
+            <div class="row">
+              <label>Upload docs</label>
+              <input type="file" id="docLibraryUpload" multiple />
+            </div>
+            <div class="row">
+              <button class="btn primary" id="btnAddToLibrary">Add to Library</button>
+              <button class="btn" id="btnSimulateCCD">Simulate CCD</button>
+            </div>
+
+            <div class="mt12" id="libraryTable"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- REPORTS -->
+      <section class="tabPane" id="tab-reports">
+        <div class="pageHeader">
+          <div>
+            <h1>Reports</h1>
+            <p class="sub">Trending of files received, errors identified, errors fixed, workflow throughput, and RAF opportunity impact (demo).</p>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="cardHead">
+              <h2>Trending (last 14 runs)</h2>
+              <div class="hint">Files received • errors found • errors fixed • actions created</div>
+            </div>
+            <div class="cardBody">
+              <div id="trendChart" class="chart"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="cardHead">
+              <h2>RAF Opportunity Impact (demo)</h2>
+              <div class="hint">Signals → opportunities identified/closed, estimated RAF and ROI capture</div>
+            </div>
+            <div class="cardBody" id="rafImpact"></div>
+          </div>
+        </div>
+
+        <div class="card mt16">
+          <div class="cardHead">
+            <h2>Top Error Types</h2>
+            <div class="hint">By frequency across runs</div>
+          </div>
+          <div class="cardBody" id="errorBreakdown"></div>
+        </div>
+
+        <div class="card mt16">
+          <div class="cardHead">
+            <h2>Provider Query Samples</h2>
+            <div class="hint">Examples for missing documentation / suspected status codes</div>
+          </div>
+          <div class="cardBody" id="providerQuerySamples"></div>
+        </div>
+      </section>
+
+      <!-- CONFIG -->
+      <section class="tabPane" id="tab-config">
+        <div class="pageHeader">
+          <div>
+            <h1>Configurations</h1>
+            <p class="sub">Demo controls: sample packs, routing defaults, and validation toggles.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <h2>Sample Packs</h2>
+            <div class="hint">Load Professional and Institutional examples for demos.</div>
+          </div>
+          <div class="cardBody">
+            <div class="row">
+              <button class="btn" id="btnLoadProSamples2">Load Pro Samples</button>
+              <button class="btn" id="btnLoadInstSamples2">Load Institutional Samples</button>
+              <button class="btn primary" id="btnRunBatch2">Run Validation</button>
+            </div>
+
+            <div class="mt12">
+              <div class="hint">Loaded items</div>
+              <div id="loadedList2" class="loadedList"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt16">
+          <div class="cardHead">
+            <h2>Default Routing</h2>
+            <div class="hint">Where actions go by finding type (demo only).</div>
+          </div>
+          <div class="cardBody" id="routingTable"></div>
+        </div>
+      </section>
+
+      <!-- AUDIT -->
+      <section class="tabPane" id="tab-audit">
+        <div class="pageHeader">
+          <div>
+            <h1>Audit</h1>
+            <p class="sub">All events tracked (runs created, fixes applied, actions updated, integration payloads generated).</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="cardHead">
+            <h2>Audit Events</h2>
+          </div>
+          <div class="cardBody" id="auditTable"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Notifications drawer -->
+  <aside class="drawer" id="drawer" style="display:none">
+    <div class="drawerHead">
+      <div>
+        <div class="drawerTitle">Notifications</div>
+        <div class="hint">Demo: Slack/Teams payload events and workflow triggers</div>
+      </div>
+      <button class="iconBtn" id="btnCloseDrawer" aria-label="Close">✕</button>
+    </div>
+    <div class="drawerBody" id="notifyList"></div>
+  </aside>
+
+  <!-- Modal -->
+  <div class="modal" id="modal" style="display:none">
+    <div class="modalCard">
+      <div class="modalHead">
+        <div class="modalTitle" id="modalTitle">—</div>
+        <div class="modalActions">
+          <button class="btn" id="btnCopyModal">Copy</button>
+          <button class="btn" id="btnCloseModal">Close</button>
+        </div>
+      </div>
+      <pre class="modalBody" id="modalBody"></pre>
+      <div class="modalFoot">
+        <button class="btn" id="btnCloseModal2">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" style="display:none"></div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>

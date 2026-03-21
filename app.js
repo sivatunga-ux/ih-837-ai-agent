@@ -5,20 +5,31 @@
  *  - DX add/fix => Linked Chart Review with evidence (CCD + provider query + docs)
  *************************/
 
-const LOGO_URL = "https://inventhealth.com/wp-content/uploads/2025/06/Option-3-2-e1748444120210.png";
+import { LOGO_URL, STORE } from "./data/constants.js";
+import { CHANGE_TYPE } from "./data/models.js";
+import { PRO_SAMPLES, INST_SAMPLES } from "./data/samples.js";
+import { applyRepairs, computeStatus, joinSegs, splitSegs, summarize, validate837 } from "./rules/validation.js";
+import { addDocToLibrary as addDocToLibraryService, simulateCCD as simulateCCDService } from "./services/docs.js";
+import {
+  DX_RECOS,
+  SIGNAL_IMPACT,
+  createActionsForRuns,
+  getEvidenceChecklist,
+  suggestChanges
+} from "./services/workflow.js";
+import {
+  buildAdjustmentPayload,
+  buildLinkedChartReviewPayload,
+  buildProviderQueryText,
+  buildSlackPayload,
+  buildTeamsPayload,
+  buildTicketPayload
+} from "./services/integrations.js";
+
 const logoEl = document.getElementById("logoImg");
 if (logoEl) logoEl.src = LOGO_URL;
 
 /* ---------- Storage ---------- */
-const STORE = {
-  runs: "ih_ra837_runs_v5",
-  actions: "ih_ra837_actions_v5",
-  audit: "ih_ra837_audit_v5",
-  notifs: "ih_ra837_notifs_v5",
-  library: "ih_ra837_doclib_v5",
-  loaded: "ih_ra837_loaded_inputs_v5"
-};
-
 const nowISO = () => new Date().toISOString();
 const uid = () => Math.random().toString(16).slice(2, 10) + "_" + Date.now().toString(16);
 
@@ -37,38 +48,6 @@ let loadedInputs = loadJSON(STORE.loaded, []);
 
 let selectedRunId = runs[0]?.id || null;
 let selectedActionId = actions[0]?.id || null;
-
-/* ---------- Constants & Rules ---------- */
-const CHANGE_TYPE = {
-  CPT_ADJUSTMENT: "CPT_ADJUSTMENT",
-  DX_LINKED_CHART_REVIEW: "DX_LINKED_CHART_REVIEW",
-  DX_CORRECTION_WITH_EVIDENCE: "DX_CORRECTION_WITH_EVIDENCE"
-};
-
-const NON_RISK_ELIGIBLE_CPTS = new Set(["36415", "81002", "93000"]);     // demo
-const IHA_CPTS = new Set(["99341","99342","99344","99345","99347","99348","99349","99350","G0402","G0438","G0439"]);
-const VALID_POS = new Set(["11","12","19","22","23","31","32","34","49","50","53","57","61"]);
-const POS_FIX_MAP = { "00":"11", "99":"11", "":"11" };
-
-// “Opportunity” CPT signals
-const CPT_AMPUTATION = new Set(["27880","27882","27590","27592"]);
-const CPT_TRANSPLANT = new Set(["50360","50365"]);
-
-function isPharmacyLikeCPT(cpt) { return /^J\d{4}$/.test(cpt || "") || ["J3490","J3590","J9999"].includes(cpt); }
-
-// Demo DX recommendations
-const DX_RECOS = {
-  AMP_STATUS_MISSING_Z89: { add: ["Z89.9"], reason: "Amputation procedure present; add Z89.* status with laterality if documented." },
-  TX_STATUS_MISSING_Z94:  { add: ["Z94.0"], reason: "Transplant procedure present; add Z94.* status if supported." },
-  ESRD_DEPENDENCE_MISSING_Z992: { add: ["Z99.2"], reason: "ESRD present; add Z99.2 dialysis dependence if supported." }
-};
-
-// Demo “RAF impact” scoring
-const SIGNAL_IMPACT = {
-  AMP_STATUS_MISSING_Z89: { raf: 0.18, roi: 1400, label: "Amputation status (Z89.*)" },
-  TX_STATUS_MISSING_Z94:  { raf: 0.22, roi: 1800, label: "Transplant status (Z94.*)" },
-  ESRD_DEPENDENCE_MISSING_Z992: { raf: 0.32, roi: 2600, label: "Dialysis dependence (Z99.2)" }
-};
 
 /* ---------- UI helpers ---------- */
 function toast(msg) {
@@ -93,214 +72,6 @@ function esc(s) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
-}
-
-/* ---------- X12 helpers ---------- */
-function splitSegs(x12) { return (x12 || "").split("~").map(s => s.trim()).filter(Boolean); }
-function joinSegs(segs) { return segs.join("~\n") + "~\n"; }
-
-function getSubscriberId(segs) {
-  for (const s of segs) {
-    if (s.startsWith("NM1*IL*")) {
-      const p = s.split("*");
-      if ((p[8] || "") === "MI") return (p[9] || "").trim();
-    }
-  }
-  return "";
-}
-function getRenderingNPI(segs) {
-  for (const s of segs) {
-    if (s.startsWith("NM1*82*")) {
-      const p = s.split("*");
-      if ((p[8] || "") === "XX") return (p[9] || "").trim();
-    }
-  }
-  return "";
-}
-function getDOS(segs) {
-  for (const s of segs) if (s.startsWith("DTP*472*D8*")) return (s.split("*")[3] || "").trim();
-  return "";
-}
-function isYYYYMMDD(s) {
-  if (!/^\d{8}$/.test(s || "")) return false;
-  const y = +s.slice(0,4), m = +s.slice(4,6), d = +s.slice(6,8);
-  const dt = new Date(Date.UTC(y, m-1, d));
-  return dt.getUTCFullYear()===y && (dt.getUTCMonth()+1)===m && dt.getUTCDate()===d;
-}
-function getClaimPOS(segs) {
-  for (const s of segs) {
-    if (s.startsWith("CLM*")) {
-      const parts = s.split("*");
-      const clm05 = parts[5] || "";
-      return (clm05.split(":")[0] || "").trim();
-    }
-  }
-  return "";
-}
-function getCPTs(segs) {
-  const out = [];
-  for (const s of segs) {
-    if (s.startsWith("SV1*") && s.includes("HC:")) {
-      const p = s.split("*");
-      const proc = (p[1] || "");
-      if (proc.startsWith("HC:")) out.push(proc.slice(3).trim());
-    }
-  }
-  return out;
-}
-function getICDs(segs) {
-  const out = [];
-  for (const s of segs) {
-    if (s.startsWith("HI*")) {
-      const parts = s.split("*").slice(1);
-      for (const c of parts) {
-        const idx = c.indexOf(":");
-        if (idx > 0) {
-          const qual = c.slice(0, idx);
-          const code = c.slice(idx + 1).trim();
-          if (qual === "ABK" && code) out.push(code);
-        }
-      }
-    }
-  }
-  return out;
-}
-function titleCase(str) {
-  const t = (str || "").toLowerCase();
-  return t.replace(/\b[a-z]/g, m => m.toUpperCase());
-}
-
-/* ---------- NEW: simple ICD validity demo ---------- */
-function isValidICD10Demo(dx) {
-  // Not a real ICD validator. For demo:
-  // - allow A00-Z99 patterns with optional dot + up to 4 chars
-  return /^[A-TV-Z][0-9][0-9A-Z](\.[0-9A-Z]{1,4})?$/.test(dx || "");
-}
-
-/* ---------- Validations / Findings ---------- */
-function validate837(x12) {
-  const segs = splitSegs(x12);
-  const findings = [];
-
-  const memberId = getSubscriberId(segs);
-  const dos = getDOS(segs);
-  const npi = getRenderingNPI(segs);
-  const pos = getClaimPOS(segs);
-  const cpts = getCPTs(segs);
-  const icds = getICDs(segs);
-
-  // Rejection-style issues
-  if (!memberId) findings.push({ level:"FATAL", type:"837_REJECTION", code:"MISSING_SUBSCRIBER_ID", msg:"Subscriber ID missing in NM1*IL (MI qualifier not populated)." });
-  if (!dos) findings.push({ level:"FATAL", type:"837_REJECTION", code:"MISSING_DOS", msg:"Missing Date of Service (DTP*472*D8)." });
-  else if (!isYYYYMMDD(dos)) findings.push({ level:"FATAL", type:"837_REJECTION", code:"INVALID_DOS", msg:`Invalid DOS format/value: ${dos}` });
-  if (!npi) findings.push({ level:"FATAL", type:"837_REJECTION", code:"MISSING_RENDERING_NPI", msg:"Rendering provider NPI missing in NM1*82*...*XX*NPI." });
-
-  // Data quality
-  if (!pos || !VALID_POS.has(pos)) findings.push({ level:"WARN", type:"837_QUALITY", code:"INVALID_POS", msg:`Invalid or non-standard POS "${pos}".` });
-
-  // RA eligibility blocks
-  const nonEligible = cpts.filter(c => NON_RISK_ELIGIBLE_CPTS.has(c));
-  if (nonEligible.length) findings.push({ level:"RA_BLOCK", type:"RISK_ELIGIBILITY", code:"NON_RISK_ELIGIBLE_CPT", msg:`Non-risk-eligible CPT(s): ${nonEligible.join(", ")}.` });
-
-  if (cpts.length && cpts.every(isPharmacyLikeCPT)) findings.push({ level:"RA_BLOCK", type:"RISK_ELIGIBILITY", code:"PHARMACY_ONLY_SERVICES", msg:"All service lines appear pharmacy/drug-only (J-code bucket)." });
-
-  // Program rule: remove dx from IHA/AWV (demo)
-  const ihaHit = cpts.some(c => IHA_CPTS.has(c));
-  if (ihaHit && icds.length) findings.push({ level:"WARN", type:"PROGRAM_RULE", code:"IHA_DIAGNOSES_PRESENT", msg:"IHA/AWV visit includes diagnosis codes. Demo rule: remove HI diagnosis segment(s)." });
-
-  // NEW: invalid dx format -> DX correction workflow
-  const invalid = icds.filter(dx => !isValidICD10Demo(dx));
-  if (invalid.length) findings.push({ level:"WARN", type:"DIAGNOSIS_QUALITY", code:"INVALID_DIAGNOSIS", msg:`Diagnosis code(s) look invalid (demo validator): ${invalid.join(", ")}.` });
-
-  // “Prospective gaps”
-  const hasAmputationCPT = cpts.some(c => CPT_AMPUTATION.has(c));
-  const hasTransplantCPT = cpts.some(c => CPT_TRANSPLANT.has(c));
-  const hasZ89 = icds.some(dx => dx.startsWith("Z89"));
-  const hasZ94 = icds.some(dx => dx.startsWith("Z94"));
-  const hasN186 = icds.includes("N18.6");
-  const hasZ992 = icds.includes("Z99.2");
-
-  if (hasAmputationCPT && !hasZ89) findings.push({ level:"SIGNAL", type:"PROSPECTIVE_GAP", code:"AMP_STATUS_MISSING_Z89", msg:"Amputation procedure present but Z89.* status not found." });
-  if (hasTransplantCPT && !hasZ94) findings.push({ level:"SIGNAL", type:"PROSPECTIVE_GAP", code:"TX_STATUS_MISSING_Z94", msg:"Transplant procedure present but Z94.* status not found." });
-  if (hasN186 && !hasZ992) findings.push({ level:"SIGNAL", type:"PROSPECTIVE_GAP", code:"ESRD_DEPENDENCE_MISSING_Z992", msg:"ESRD (N18.6) found but Z99.2 dialysis dependence not found." });
-
-  return { segs, findings, memberId };
-}
-
-/* ---------- Repairs (auditable, demo-safe) ---------- */
-function applyRepairs(x12) {
-  let segs = splitSegs(x12);
-  const repairs = [];
-
-  // Fix POS
-  const pos = getClaimPOS(segs);
-  if (!pos || !VALID_POS.has(pos)) {
-    const replacement = POS_FIX_MAP[pos] || POS_FIX_MAP[""];
-    const idx = segs.findIndex(s => s.startsWith("CLM*"));
-    if (idx >= 0) {
-      const before = segs[idx];
-      const parts = before.split("*");
-      const clm05 = parts[5] || "";
-      const rest = clm05.includes(":") ? clm05.split(":").slice(1).join(":") : "B:1";
-      parts[5] = `${replacement}:${rest}`;
-      segs[idx] = parts.join("*");
-      repairs.push({ type:"FIX_POS", before, after:segs[idx], count:1, reason:`Mapped POS "${pos}" → "${replacement}".` });
-    }
-  }
-
-  // Normalize provider name casing
-  for (let i=0;i<segs.length;i++){
-    if (segs[i].startsWith("NM1*82*")) {
-      const before = segs[i];
-      const p = before.split("*");
-      const last = p[3] || "";
-      const first = p[4] || "";
-      const fixedLast = titleCase(last);
-      const fixedFirst = titleCase(first);
-      if ((last && fixedLast !== last) || (first && fixedFirst !== first)) {
-        p[3] = fixedLast; p[4] = fixedFirst;
-        segs[i] = p.join("*");
-        repairs.push({ type:"NORMALIZE_PROVIDER_NAME", before, after:segs[i], count:1, reason:"Normalized provider name casing." });
-      }
-    }
-  }
-
-  // Remove dx from IHA claims
-  const cpts = getCPTs(segs);
-  const ihaHit = cpts.some(c => IHA_CPTS.has(c));
-  if (ihaHit) {
-    const hiCount = segs.filter(s => s.startsWith("HI*")).length;
-    if (hiCount) {
-      const beforeSample = segs.find(s => s.startsWith("HI*")) || "";
-      segs = segs.filter(s => !s.startsWith("HI*"));
-      repairs.push({ type:"REMOVE_DX_FROM_IHA", before:beforeSample, after:"(HI segment removed)", count:hiCount, reason:"Demo rule: remove diagnosis codes from IHA/AWV claim." });
-    }
-  }
-
-  return { repaired: joinSegs(segs), repairs };
-}
-
-/* ---------- Summary ---------- */
-function summarize(repairs, findings) {
-  const repairsByType = {};
-  let repairsTotal = 0;
-  for (const r of repairs) {
-    repairsByType[r.type] = (repairsByType[r.type] || 0) + (r.count || 1);
-    repairsTotal += (r.count || 1);
-  }
-  const fatal = findings.filter(f => f.level === "FATAL").length;
-  const raBlocks = findings.filter(f => f.level === "RA_BLOCK").length;
-  const signals = findings.filter(f => f.level === "SIGNAL").length;
-  const warns = findings.filter(f => f.level === "WARN").length;
-  return { repairsTotal, repairsByType, fatal, raBlocks, signals, warns };
-}
-
-function computeStatus(findings) {
-  const hasFatal = findings.some(f => f.level === "FATAL");
-  const hasRABlock = findings.some(f => f.level === "RA_BLOCK");
-  if (hasFatal) return "FAIL";
-  if (hasRABlock) return "RA_BLOCKED";
-  return "PASS";
 }
 
 /* ---------- Batch ---------- */
@@ -347,95 +118,11 @@ async function runBatch(inputs) {
   renderAll();
 }
 
-/* ---------- Action classification (NEW) ---------- */
-function classifyChangeType(finding) {
-  // CPT-related blocks => adjustment workflow
-  if (finding.code === "NON_RISK_ELIGIBLE_CPT" || finding.code === "PHARMACY_ONLY_SERVICES") {
-    return CHANGE_TYPE.CPT_ADJUSTMENT;
-  }
-  // Prospective gaps => linked chart review
-  if (finding.level === "SIGNAL" && finding.type === "PROSPECTIVE_GAP") {
-    return CHANGE_TYPE.DX_LINKED_CHART_REVIEW;
-  }
-  // Invalid dx => correction with evidence
-  if (finding.code === "INVALID_DIAGNOSIS") {
-    return CHANGE_TYPE.DX_CORRECTION_WITH_EVIDENCE;
-  }
-  // Default: if it impacts risk, treat as chart-review for demo
-  if (finding.type === "RISK_ELIGIBILITY") return CHANGE_TYPE.CPT_ADJUSTMENT;
-  return CHANGE_TYPE.DX_LINKED_CHART_REVIEW;
-}
-
-function actionPriority(finding) {
-  if (finding.level === "FATAL") return "P0";
-  if (finding.level === "RA_BLOCK") return "P0";
-  if (finding.level === "SIGNAL") return "P1";
-  return "P2";
-}
-function shouldCreateAction(finding, scope) {
-  if (scope === "all") return true;
-  if (scope === "fatal_ra") return (finding.level === "FATAL" || finding.level === "RA_BLOCK" || finding.level === "SIGNAL");
-  if (scope === "ra_only") return finding.level === "RA_BLOCK";
-  if (scope === "fatal_only") return finding.level === "FATAL";
-  return false;
-}
-
 /* ---------- Actions ---------- */
 function createActionsFromRuns() {
   const scope = document.getElementById("actionScope")?.value || "fatal_ra";
   const defaultOwner = document.getElementById("assignTo")?.value || "Risk Adjustment Team";
-  const created = [];
-
-  for (const run of runs) {
-    for (const f of run.findings) {
-      if (!shouldCreateAction(f, scope)) continue;
-
-      const changeType = classifyChangeType(f);
-
-      // default routing by changeType
-      const owner =
-        changeType === CHANGE_TYPE.CPT_ADJUSTMENT ? "Claims Ops" :
-        changeType === CHANGE_TYPE.DX_CORRECTION_WITH_EVIDENCE ? "Coding QA" :
-        defaultOwner;
-
-      created.push({
-        id: uid(),
-        createdAt: nowISO(),
-        runId: run.id,
-        runName: run.name,
-        memberId: run.memberId || "UNKNOWN",
-        title: `${f.code}: ${f.msg}`,
-        finding: f,
-        changeType,
-        owner,
-        status: "NEW",
-        priority: actionPriority(f),
-        notes: "",
-
-        // Evidence tracking (NEW)
-        evidence: {
-          providerQueryGenerated: false,
-          ccdAttached: false,
-          docsAttachedCount: 0
-        },
-
-        // Change plan (NEW) - what we intend to adjust/submit
-        changePlan: {
-          cpt: { add: [], remove: [], replace: [] },  // replace entries: {from,to}
-          dx:  { add: [], remove: [], fix: [] }       // fix entries: {from,to}
-        },
-
-        // Submissions (NEW)
-        submissions: {
-          adjustment: null,        // payload
-          linkedChartReview: null  // payload
-        },
-
-        docs: []
-      });
-    }
-    run.step = run.step + " → ACTIONS_CREATED";
-  }
+  const created = createActionsForRuns(runs, scope, defaultOwner, uid, nowISO);
 
   if (!created.length) { toast("No actions created for selected scope."); return; }
   actions = [...created, ...actions];
@@ -450,95 +137,9 @@ function createActionsFromRuns() {
   renderAll();
 }
 
-/* ---------- Integrations payloads (demo) ---------- */
-function buildSlackPayload(action) {
-  return {
-    text:
-`Invent Health • 837 Risk Analyzer
-*${action.priority}* • ${action.status} • ${action.changeType}
-Member: ${action.memberId}
-Run: ${action.runName}
-Finding: ${action.finding.code}
-${action.finding.msg}
-Owner: ${action.owner}`
-  };
-}
-function buildTeamsPayload(action) {
-  return {
-    type: "message",
-    attachments: [{
-      contentType: "application/vnd.microsoft.card.adaptive",
-      content: {
-        type: "AdaptiveCard",
-        version: "1.4",
-        body: [
-          { type: "TextBlock", size: "Large", weight: "Bolder", text: "Invent Health • 837 Risk Analyzer" },
-          { type: "TextBlock", text: `Priority: ${action.priority}   Status: ${action.status}`, wrap: true },
-          { type: "TextBlock", text: `Change Type: ${action.changeType}`, wrap: true },
-          { type: "TextBlock", text: `Member: ${action.memberId}`, wrap: true },
-          { type: "TextBlock", text: `Finding: ${action.finding.code}`, wrap: true, weight: "Bolder" },
-          { type: "TextBlock", text: action.finding.msg, wrap: true }
-        ]
-      }
-    }]
-  };
-}
-function buildTicketPayload(action) {
-  return {
-    system: "Jira/ServiceNow (Demo)",
-    fields: {
-      project: { key: "RA" },
-      issueType: "Task",
-      summary: `[${action.priority}] ${action.finding.code} • Member ${action.memberId}`,
-      description:
-        `Run: ${action.runName}\nOwner: ${action.owner}\nStatus: ${action.status}\nChangeType: ${action.changeType}\n\nFinding:\n${action.finding.msg}\n\nNotes:\n${action.notes || "(none)"}`,
-      labels: ["ra837", "riskflow", action.finding.type, action.finding.level, action.changeType].filter(Boolean)
-    }
-  };
-}
-
-function buildProviderQueryText(action) {
-  return `
-PROVIDER QUERY REQUEST (Demo)
-
-Member ID: ${action.memberId}
-Source: 837 Ingestion (run: ${action.runName})
-Finding: ${action.finding.code}
-Details: ${action.finding.msg}
-
-Requested documentation:
-- Most recent progress note with assessment/plan
-- Problem list and chronic condition monitoring evidence (MEAT)
-- Discharge summary (if applicable)
-- CCD / Continuity of Care Document
-- Specialist note(s) supporting status conditions (e.g., amputee / transplant / dialysis)
-
-Requested action:
-- Confirm documentation supports the condition/status for RA submission.
-
-Invent Health • 837 Risk Analyzer
-`;
-}
-
 /* ---------- CCD/doc simulation ---------- */
-function simulateCCD(memberId) {
-  const content = `<?xml version="1.0" encoding="UTF-8"?>
-<ClinicalDocument>
-  <id extension="${uid()}" />
-  <title>CCD (Demo)</title>
-  <recordTarget><patientRole><id extension="${memberId}" /></patientRole></recordTarget>
-  <component><structuredBody>
-    <component><section>
-      <title>Problems</title>
-      <text>Diabetes mellitus; CKD/ESRD; status conditions (demo)</text>
-    </section></component>
-  </structuredBody></component>
-</ClinicalDocument>`;
-  return { name: `CCD_${memberId}.xml`, type: "xml", contentPreview: content.slice(0, 1200) };
-}
 function addDocToLibrary(memberId, fileName, type, contentPreview) {
-  const doc = { id: uid(), memberId, name: fileName, type, createdAt: nowISO(), contentPreview };
-  doclib.unshift(doc);
+  const doc = addDocToLibraryService(doclib, memberId, fileName, type, contentPreview, uid, nowISO);
   saveJSON(STORE.library, doclib);
   return doc;
 }
@@ -552,98 +153,6 @@ async function readFilePreview(file) {
     r.onload = () => resolve(String(r.result || "").slice(0, 8000));
     r.readAsText(file);
   });
-}
-
-/* ---------- NEW: Adjustment + Linked Chart Review payloads ---------- */
-function buildAdjustmentPayload(action) {
-  // Demo output: “what we would submit” (not a real 837)
-  const plan = action.changePlan;
-  return {
-    type: "837_ADJUSTMENT",
-    mode: "REPLACE", // could be VOID/REPLACE; demo
-    memberId: action.memberId,
-    sourceRun: action.runName,
-    finding: { code: action.finding.code, msg: action.finding.msg },
-    changes: {
-      cpt: plan.cpt,
-      dx: plan.dx
-    },
-    validationNotes: [
-      "CPT change impacts risk eligibility and can require adjustment or void/rebill.",
-      "Payload is demo JSON; replace with real 837 generator and payer/CMS rules."
-    ],
-    createdAt: nowISO()
-  };
-}
-
-function buildLinkedChartReviewPayload(action) {
-  const plan = action.changePlan;
-  const docIds = action.docs.slice(0, 10);
-  const docRefs = docIds.map(id => {
-    const d = doclib.find(x => x.id === id);
-    return d ? { name: d.name, type: d.type, createdAt: d.createdAt } : { id };
-  });
-
-  return {
-    type: "LINKED_CHART_REVIEW_SUBMISSION",
-    memberId: action.memberId,
-    sourceRun: action.runName,
-    finding: { code: action.finding.code, msg: action.finding.msg },
-    diagnosisRecommendation: plan.dx,
-    evidence: {
-      providerQueryGenerated: action.evidence.providerQueryGenerated,
-      ccdAttached: action.evidence.ccdAttached,
-      attachedDocs: docRefs
-    },
-    auditReady: true,
-    createdAt: nowISO()
-  };
-}
-
-function getEvidenceChecklist(action) {
-  const hasCCD = !!action.evidence.ccdAttached;
-  const hasQuery = !!action.evidence.providerQueryGenerated;
-  const hasDoc = (action.evidence.docsAttachedCount || 0) > 0;
-  return { hasCCD, hasQuery, hasDoc, complete: hasCCD && hasQuery && hasDoc };
-}
-
-/* ---------- NEW: Suggest changes for CPT/DX ---------- */
-function suggestChanges(action) {
-  // Reset suggested changes each click (demo-friendly)
-  action.changePlan.cpt = { add: [], remove: [], replace: [] };
-  action.changePlan.dx  = { add: [], remove: [], fix: [] };
-
-  // CPT adjustment cases
-  if (action.changeType === CHANGE_TYPE.CPT_ADJUSTMENT) {
-    if (action.finding.code === "NON_RISK_ELIGIBLE_CPT") {
-      // suggest add E/M and remove non-eligible labs
-      action.changePlan.cpt.add.push("99213");
-      action.changePlan.cpt.remove.push("36415");
-      action.changePlan.cpt.remove.push("81002");
-    }
-    if (action.finding.code === "PHARMACY_ONLY_SERVICES") {
-      // suggest add an E/M (demo) to make it eligible
-      action.changePlan.cpt.add.push("99213");
-    }
-    return { summary: "Suggested CPT change plan created (demo): add E/M, remove non-eligible lines.", type: "CPT" };
-  }
-
-  // DX linked chart review signals
-  if (action.changeType === CHANGE_TYPE.DX_LINKED_CHART_REVIEW && DX_RECOS[action.finding.code]) {
-    action.changePlan.dx.add.push(...DX_RECOS[action.finding.code].add);
-    return { summary: `Suggested DX add plan: ${DX_RECOS[action.finding.code].add.join(", ")} (evidence required).`, type: "DX_ADD" };
-  }
-
-  // DX correction
-  if (action.changeType === CHANGE_TYPE.DX_CORRECTION_WITH_EVIDENCE) {
-    // demo “fix”: remove bad token and suggest a plausible corrected one
-    // (for real: use CCD, coding rules, and model.)
-    action.changePlan.dx.fix.push({ from: "E11.9X", to: "E11.9" });
-    return { summary: "Suggested DX correction (demo): E11.9X → E11.9 (requires evidence).", type: "DX_FIX" };
-  }
-
-  // Default: no-op
-  return { summary: "No suggestions available for this action type.", type: "NONE" };
 }
 
 /* ---------- Rendering helpers ---------- */
@@ -1174,7 +683,7 @@ function renderActionDetail() {
   // Retrieve CCD marks evidence flag (NEW)
   document.getElementById("btnRetrieveCCD").onclick = () => {
     const memberId = a.memberId || "UNKNOWN";
-    const ccd = simulateCCD(memberId);
+    const ccd = simulateCCDService(memberId, uid);
     const doc = addDocToLibrary(memberId, ccd.name, ccd.type, ccd.contentPreview);
     a.docs.unshift(doc.id);
     a.evidence.ccdAttached = true;
@@ -1224,7 +733,7 @@ function renderActionDetail() {
   const btnAdj = document.getElementById("btnGenAdjustment");
   if (btnAdj) {
     btnAdj.onclick = () => {
-      const p = buildAdjustmentPayload(a);
+      const p = buildAdjustmentPayload(a, nowISO);
       a.submissions.adjustment = p;
       saveJSON(STORE.actions, actions);
       addAudit("ADJUSTMENT_PAYLOAD_GENERATED", { actionId: a.id, payload: p });
@@ -1244,7 +753,7 @@ function renderActionDetail() {
         addNotif("Submission blocked", `Missing evidence for linked chart review: CCD=${chk.hasCCD}, Query=${chk.hasQuery}, Doc=${chk.hasDoc}`);
         return;
       }
-      const p = buildLinkedChartReviewPayload(a);
+      const p = buildLinkedChartReviewPayload(a, doclib, nowISO);
       a.submissions.linkedChartReview = p;
       a.status = "CLOSED"; // demo close on submission
       saveJSON(STORE.actions, actions);
@@ -1354,70 +863,6 @@ function resetDemo() {
   renderAll();
 }
 
-/* ---------- Samples ---------- */
-const PRO_SAMPLES = [
-  { name: "PRO_02_NonRiskEligibleCPT_RA_BLOCK", text:
-`ST*837*0002~
-NM1*IL*1*DOE*JOHN****MI*W123456789~
-DMG*D8*19800101*M~
-NM1*82*1*SMITH*JANE****XX*1234567893~
-CLM*DEF456*100***11:B:1*Y*A*Y*I~
-DTP*472*D8*20240110~
-HI*ABK:E11.9~
-SV1*HC:36415*10*UN*1~
-SV1*HC:81002*20*UN*1~` },
-  { name: "PRO_03_PharmacyOnlyServices_RA_BLOCK", text:
-`ST*837*0003~
-NM1*IL*1*DOE*JOHN****MI*W223456789~
-DMG*D8*19751212*F~
-NM1*82*1*SMITH*JANE****XX*1234567893~
-CLM*PHARM001*250***11:B:1*Y*A*Y*I~
-DTP*472*D8*20240112~
-HI*ABK:E11.9~
-SV1*HC:J3490*120*UN*1~
-SV1*HC:J9999*130*UN*1~` },
-  { name: "PRO_06_AmputationGap_Z89_SIGNAL", text:
-`ST*837*0006~
-NM1*IL*1*DOE*JOHN****MI*W523456789~
-DMG*D8*19551111*M~
-NM1*82*1*SMITH*JANE****XX*1234567893~
-CLM*AMP001*500***11:B:1*Y*A*Y*I~
-DTP*472*D8*20240210~
-HI*ABK:E11.9~
-SV1*HC:27880*500*UN*1~` },
-  { name: "PRO_07_TransplantGap_Z94_SIGNAL", text:
-`ST*837*0007~
-NM1*IL*1*DOE*JOHN****MI*W623456789~
-DMG*D8*19440202*F~
-NM1*82*1*SMITH*JANE****XX*1234567893~
-CLM*TX001*800***11:B:1*Y*A*Y*I~
-DTP*472*D8*20240301~
-HI*ABK:I12.0~
-SV1*HC:50360*800*UN*1~` },
-  { name: "PRO_09_InvalidDx_DXFix_Evidence", text:
-`ST*837*0009~
-NM1*IL*1*DOE*JOHN****MI*W823456789~
-DMG*D8*19600101*M~
-NM1*82*1*SMITH*JANE****XX*1234567893~
-CLM*DXBAD*120***11:B:1*Y*A*Y*I~
-DTP*472*D8*20240412~
-HI*ABK:E11.9X*ABK:N18.6~
-SV1*HC:99213*120*UN*1~` }
-];
-
-const INST_SAMPLES = [
-  { name: "INST_02_RadiologyLabOnly_NonRiskEligible_RA_BLOCK", text:
-`ST*837*1002~
-NM1*IL*1*DOE*JAMES****MI*W900000002~
-DMG*D8*19620202*F~
-NM1*82*1*FACILITY*RAD****XX*1888888888~
-CLM*INST002*420***22:B:1*Y*A*Y*I~
-DTP*472*D8*20240410~
-HI*ABK:E11.9~
-SV1*HC:36415*20*UN*1~
-SV1*HC:93000*400*UN*1~` }
-];
-
 /* ---------- Wiring ---------- */
 function wireUI() {
   document.querySelectorAll(".tab").forEach(btn => {
@@ -1512,7 +957,7 @@ function wireUI() {
 
   document.getElementById("btnSimulateCCD").onclick = () => {
     const memberId = (document.getElementById("docMemberId").value || "").trim() || "UNKNOWN";
-    const ccd = simulateCCD(memberId);
+    const ccd = simulateCCDService(memberId, uid);
     addDocToLibrary(memberId, ccd.name, ccd.type, ccd.contentPreview);
     addAudit("CCD_RETRIEVED", { memberId, demo: true });
     addNotif("CCD retrieved (demo)", `CCD added for member ${memberId}.`);

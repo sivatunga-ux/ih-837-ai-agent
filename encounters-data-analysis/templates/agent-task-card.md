@@ -1,0 +1,26 @@
+# Agent Task Card Template
+
+- Task ID: `EDA-XXXX`
+- Agent Role: `<ROLE_NAME>`
+- Owner Agent Handle: `<agent-handle>`
+- Branch: `cursor/x12-edi-parser-analysis-8ccd`
+- Allowed Paths:
+  - `<path 1>`
+  - `<path 2>`
+- Forbidden Paths:
+  - `<path 1>`
+  - `<path 2>`
+- Inputs:
+  - `<inputs>`
+- Deliverables:
+  - `<deliverables>`
+- Definition of Done:
+  - `<done criteria>`
+- Validation Commands:
+  - `<command 1>`
+  - `<command 2>`
+- Token Budget:
+  - Prompt budget: `<N>`
+  - Max turns: `<N>`
+- Handoff Required: `Yes/No`
+- Downstream Consumer Role: `<role>`

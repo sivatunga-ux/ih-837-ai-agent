@@ -336,3 +336,119 @@ td{font-size:13px}
 .docName{font-weight:900}
 .docMeta{font-size:12px;color:var(--muted);margin-top:3px}
 .docActions{display:flex;gap:8px}
+
+/* ── 837 Map Accordion ── */
+.mapLoop{
+  border:1px solid var(--line);
+  border-radius:12px;
+  margin-bottom:10px;
+  overflow:hidden;
+}
+.mapLoopHead{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 14px;
+  cursor:pointer;
+  background:#fbfdff;
+  border-bottom:1px solid var(--line);
+  user-select:none;
+}
+.mapLoopHead:hover{background:#f2f6ff}
+.mapLoopHead .arrow{
+  transition:transform .2s;
+  font-size:12px;
+  color:var(--muted);
+}
+.mapLoopHead.open .arrow{transform:rotate(90deg)}
+.mapLoopId{
+  font-family:var(--mono);
+  font-weight:900;
+  font-size:13px;
+  background:rgba(47,102,224,.10);
+  color:var(--blue);
+  padding:3px 8px;
+  border-radius:8px;
+  white-space:nowrap;
+}
+.mapLoopName{font-weight:800;font-size:13px;flex:1}
+.mapLoopRepeat{
+  font-size:11px;color:var(--muted);font-weight:700;
+  background:var(--card);border:1px solid var(--line);
+  padding:2px 8px;border-radius:8px;white-space:nowrap;
+}
+.mapLoopBody{display:none;padding:10px 14px}
+.mapLoopBody.open{display:block}
+
+.mapSeg{
+  border:1px solid var(--line);
+  border-radius:10px;
+  margin-bottom:8px;
+  overflow:hidden;
+}
+.mapSegHead{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;
+  cursor:pointer;
+  background:#fff;
+  border-bottom:1px solid var(--line);
+  user-select:none;
+}
+.mapSegHead:hover{background:#f8faff}
+.mapSegHead .arrow{transition:transform .2s;font-size:11px;color:var(--muted)}
+.mapSegHead.open .arrow{transform:rotate(90deg)}
+.mapSegId{
+  font-family:var(--mono);
+  font-weight:900;
+  font-size:12px;
+  color:#0b1020;
+  background:#e6ecf5;
+  padding:2px 7px;
+  border-radius:6px;
+}
+.mapSegName{font-weight:700;font-size:12px;flex:1}
+.mapSegUsage{
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  padding:2px 8px;
+  border-radius:6px;
+}
+.mapSegUsage.req{background:rgba(34,197,94,.12);color:#15803d}
+.mapSegUsage.sit{background:rgba(245,158,11,.12);color:#92400e}
+.mapSegBody{display:none}
+.mapSegBody.open{display:block}
+
+.mapSegBody table{font-size:12px}
+.mapSegBody th{font-size:11px;padding:6px 8px;background:#f8faff}
+.mapSegBody td{padding:6px 8px;font-size:12px}
+.mapSegBody td:first-child{font-family:var(--mono);font-weight:800;white-space:nowrap;color:var(--blue)}
+.mapReq{
+  display:inline-block;width:18px;height:18px;line-height:18px;
+  text-align:center;border-radius:5px;font-weight:900;font-size:10px;
+}
+.mapReq.r{background:rgba(47,102,224,.12);color:var(--blue)}
+.mapReq.s{background:rgba(245,158,11,.12);color:#92400e}
+.mapReq.n{background:#f1f5f9;color:#94a3b8}
+.mapTypeTag{
+  font-family:var(--mono);font-size:10px;
+  background:#f1f5f9;padding:1px 5px;border-radius:4px;
+  color:var(--muted);
+}
+
+.mapSearch{
+  width:100%;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+  background:#fff;
+  font-weight:700;
+  margin-bottom:14px;
+}
+.mapStats{
+  display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;
+}
+.mapStat{
+  background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:8px 14px;
+  font-size:12px;font-weight:800;
+}
+.mapStat b{color:var(--blue);font-size:16px;margin-right:4px}

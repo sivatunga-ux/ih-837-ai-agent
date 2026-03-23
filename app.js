@@ -8,6 +8,8 @@
 import { LOGO_URL, STORE } from "./data/constants.js";
 import { CHANGE_TYPE } from "./data/models.js";
 import { PRO_SAMPLES, INST_SAMPLES } from "./data/samples.js";
+import { MAPPING_837P } from "./data/mapping837P.js";
+import { MAPPING_837I } from "./data/mapping837I.js";
 import { applyRepairs, computeStatus, joinSegs, splitSegs, summarize, validate837 } from "./rules/validation.js";
 import { addDocToLibrary as addDocToLibraryService, simulateCCD as simulateCCDService } from "./services/docs.js";
 import {
@@ -834,6 +836,156 @@ function renderRoutingTable() {
   el.innerHTML = table(["Change Type", "Default Route", "Demo Action"], rows);
 }
 
+/* ---------- 837 Map ---------- */
+let currentMapping = MAPPING_837P;
+
+function countMappingStats(mapping) {
+  let loops = mapping.loops.length;
+  let segs = 0;
+  let elems = 0;
+  for (const loop of mapping.loops) {
+    segs += loop.segments.length;
+    for (const seg of loop.segments) {
+      elems += seg.elements.length;
+    }
+  }
+  return { loops, segs, elems };
+}
+
+function renderMapping(mapping, filterText) {
+  currentMapping = mapping;
+  const title = document.getElementById("mapTitle");
+  const desc = document.getElementById("mapDesc");
+  const body = document.getElementById("mapBody");
+  if (!title || !body) return;
+
+  title.textContent = `${mapping.id} — ${mapping.name}`;
+  desc.textContent = mapping.description;
+
+  const filter = (filterText || "").toLowerCase().trim();
+  const stats = countMappingStats(mapping);
+
+  const reqBadge = (r) => {
+    const cls = r === "R" ? "r" : r === "S" ? "s" : "n";
+    const label = r === "R" ? "R" : r === "S" ? "S" : "N";
+    return `<span class="mapReq ${cls}" title="${r === "R" ? "Required" : r === "S" ? "Situational" : "Not Used"}">${label}</span>`;
+  };
+
+  const usageCls = (u) => (u || "").toLowerCase().includes("required") ? "req" : "sit";
+
+  let html = `
+    <input type="text" class="mapSearch" id="mapSearchInput" placeholder="Search segments or elements (e.g., NM1, CLM05, diagnosis)…" value="${esc(filter)}" />
+    <div class="mapStats">
+      <div class="mapStat"><b>${stats.loops}</b> Loops</div>
+      <div class="mapStat"><b>${stats.segs}</b> Segments</div>
+      <div class="mapStat"><b>${stats.elems}</b> Data Elements</div>
+    </div>
+  `;
+
+  for (const loop of mapping.loops) {
+    let loopMatches = false;
+    let segHtmls = "";
+
+    for (const seg of loop.segments) {
+      let segMatches = false;
+      const elemRows = seg.elements.map(el => {
+        const elMatch = !filter ||
+          el.pos.toLowerCase().includes(filter) ||
+          el.name.toLowerCase().includes(filter) ||
+          el.desc.toLowerCase().includes(filter) ||
+          seg.id.toLowerCase().includes(filter);
+        if (elMatch) segMatches = true;
+        return `<tr${!elMatch && filter ? ' style="display:none"' : ""}>
+          <td>${esc(el.pos)}</td>
+          <td>${esc(el.name)}</td>
+          <td>${reqBadge(el.req)}</td>
+          <td><span class="mapTypeTag">${esc(el.type)}</span></td>
+          <td>${esc(el.length)}</td>
+          <td>${esc(el.desc)}</td>
+        </tr>`;
+      }).join("");
+
+      if (!filter) segMatches = true;
+      if (!segMatches && filter && (
+        seg.id.toLowerCase().includes(filter) ||
+        seg.name.toLowerCase().includes(filter)
+      )) segMatches = true;
+
+      if (segMatches) loopMatches = true;
+
+      const openSeg = filter && segMatches;
+      segHtmls += `<div class="mapSeg" ${!segMatches && filter ? 'style="display:none"' : ""}>
+        <div class="mapSegHead${openSeg ? " open" : ""}">
+          <span class="arrow">▶</span>
+          <span class="mapSegId">${esc(seg.id)}</span>
+          <span class="mapSegName">${esc(seg.name)}</span>
+          <span class="mapSegUsage ${usageCls(seg.usage)}">${esc(seg.usage)}</span>
+          ${seg.repeat !== "1" ? `<span class="mapLoopRepeat">×${esc(seg.repeat)}</span>` : ""}
+        </div>
+        <div class="mapSegBody${openSeg ? " open" : ""}">
+          <div class="tableWrap">
+            <table>
+              <thead><tr><th>Element</th><th>Name</th><th>Req</th><th>Type</th><th>Length</th><th>Description</th></tr></thead>
+              <tbody>${elemRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    if (!filter) loopMatches = true;
+    if (!loopMatches && filter && (
+      loop.id.toLowerCase().includes(filter) ||
+      loop.name.toLowerCase().includes(filter)
+    )) loopMatches = true;
+
+    const openLoop = filter && loopMatches;
+    html += `<div class="mapLoop" ${!loopMatches && filter ? 'style="display:none"' : ""}>
+      <div class="mapLoopHead${openLoop ? " open" : ""}">
+        <span class="arrow">▶</span>
+        <span class="mapLoopId">${esc(loop.id)}</span>
+        <span class="mapLoopName">${esc(loop.name)}</span>
+        <span class="mapLoopRepeat">repeat: ${esc(loop.repeat)}</span>
+      </div>
+      <div class="mapLoopBody${openLoop ? " open" : ""}">${segHtmls}</div>
+    </div>`;
+  }
+
+  body.innerHTML = html;
+
+  body.querySelectorAll(".mapLoopHead").forEach(h => {
+    h.onclick = () => {
+      h.classList.toggle("open");
+      h.nextElementSibling.classList.toggle("open");
+    };
+  });
+  body.querySelectorAll(".mapSegHead").forEach(h => {
+    h.onclick = (e) => {
+      e.stopPropagation();
+      h.classList.toggle("open");
+      h.nextElementSibling.classList.toggle("open");
+    };
+  });
+
+  const searchInput = document.getElementById("mapSearchInput");
+  if (searchInput) {
+    let debounce;
+    searchInput.oninput = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => renderMapping(currentMapping, searchInput.value), 200);
+    };
+  }
+}
+
+function mapExpandAll() {
+  document.querySelectorAll(".mapLoopHead").forEach(h => { h.classList.add("open"); h.nextElementSibling.classList.add("open"); });
+  document.querySelectorAll(".mapSegHead").forEach(h => { h.classList.add("open"); h.nextElementSibling.classList.add("open"); });
+}
+function mapCollapseAll() {
+  document.querySelectorAll(".mapLoopHead").forEach(h => { h.classList.remove("open"); h.nextElementSibling.classList.remove("open"); });
+  document.querySelectorAll(".mapSegHead").forEach(h => { h.classList.remove("open"); h.nextElementSibling.classList.remove("open"); });
+}
+
 /* ---------- Tabs ---------- */
 function setTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -846,6 +998,9 @@ function setTab(name) {
     renderRAFImpact();
     renderErrorBreakdown();
     renderProviderQuerySamples();
+  }
+  if (name === "mapping") {
+    renderMapping(currentMapping, document.getElementById("mapSearchInput")?.value || "");
   }
 }
 
@@ -954,6 +1109,11 @@ function wireUI() {
     up.value = "";
     renderLibrary();
   };
+
+  document.getElementById("btnMapPro").onclick = () => { renderMapping(MAPPING_837P); };
+  document.getElementById("btnMapInst").onclick = () => { renderMapping(MAPPING_837I); };
+  document.getElementById("btnMapExpandAll").onclick = mapExpandAll;
+  document.getElementById("btnMapCollapseAll").onclick = mapCollapseAll;
 
   document.getElementById("btnSimulateCCD").onclick = () => {
     const memberId = (document.getElementById("docMemberId").value || "").trim() || "UNKNOWN";

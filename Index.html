@@ -60,6 +60,11 @@
           <span class="navIcon">📊</span>
           <span>Reports</span>
         </button>
+
+        <button class="navItem tab" data-tab="mapping">
+          <span class="navIcon">🗺️</span>
+          <span>837 Map</span>
+        </button>
       </div>
 
       <div class="navGroup">
@@ -393,6 +398,32 @@
             <div class="hint">Examples for missing documentation / suspected status codes</div>
           </div>
           <div class="cardBody" id="providerQuerySamples"></div>
+        </div>
+      </section>
+
+      <!-- 837 MAP -->
+      <section class="tabPane" id="tab-mapping">
+        <div class="pageHeader">
+          <div>
+            <h1>837 File Mapping</h1>
+            <p class="sub">Complete segment and data-element reference for 837P (Professional) and 837I (Institutional) per ASC X12N 005010.</p>
+          </div>
+          <div class="pageActions">
+            <button class="btn" id="btnMapPro">837P Professional</button>
+            <button class="btn" id="btnMapInst">837I Institutional</button>
+            <button class="btn" id="btnMapExpandAll">Expand All</button>
+            <button class="btn" id="btnMapCollapseAll">Collapse All</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <h2 id="mapTitle">837P — Professional (005010X222A1)</h2>
+            <div class="hint" id="mapDesc">Health Care Claim: Professional — used by physicians, therapists, outpatient clinics, and other non-institutional providers.</div>
+          </div>
+          <div class="cardBody" id="mapBody">
+            <div class="hint">Select a mapping type above to view its loop/segment/element hierarchy.</div>
+          </div>
         </div>
       </section>
 

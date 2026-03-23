@@ -44,3 +44,22 @@ Validation Performed:
 - Document integrity review.
 Reviewer: PENDING
 Approval Outcome: PENDING
+
+### Entry 002
+
+Date: 2026-03-22
+Task ID: EDA-GUARDRAILS-002
+Agent Role: Orchestration and Reliability Agent
+Agent Name/ID: cursor-cloud-main-agent
+Branch: cursor/x12-edi-parser-analysis-8ccd
+Commit SHA: PENDING_COMMIT
+Files Changed:
+- encounters-data-analysis/GUARDRAILS_TOKEN_USAGE.md
+- encounters-data-analysis/CHANGE_AUDIT_LOG.md
+Summary:
+- Added mandatory validation test case and regression policy before platform changes.
+- Restricted regression scope to component-level suites by default; full integration tests run only by explicit gate.
+Validation Performed:
+- Documentation consistency review.
+Reviewer: PENDING
+Approval Outcome: PENDING

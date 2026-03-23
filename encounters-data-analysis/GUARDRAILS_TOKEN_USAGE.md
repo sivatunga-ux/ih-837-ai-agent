@@ -69,6 +69,20 @@ Avoid broad tasks:
 - Ask agents for "changed files + rationale + tests run" only.
 - Prohibit repeated architecture explanations after wave 1.
 
+## Validation and Regression Test Gate
+
+Before making new changes in any module, agents must satisfy the following:
+
+1. Create or update validation test cases for the affected component.
+2. Run regression tests at the component scope before merge.
+3. Record test evidence in task handoff and PR comment (commands + pass/fail).
+
+Scope policy:
+
+- Regression testing is limited to individual components (module-level) by default.
+- Full integration testing is a separate pipeline/activity and should not be bundled into every component change unless explicitly requested.
+- If no component test suite exists, the owner agent must add a minimal baseline suite in the same task before code changes are considered complete.
+
 ## Termination Criteria
 
 Stop an agent when:

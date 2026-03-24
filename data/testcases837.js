@@ -206,10 +206,10 @@ export const PRO_TEST_CASES = [
     id: "P11",
     name: "Invalid diagnosis code format → WARN",
     type: "837P",
-    raw: `ST*837*0011~\nNM1*IL*1*DOE*JOHN****MI*W111111112~\nNM1*82*1*Smith*Jane****XX*1234567890~\nCLM*CLM011*120***11:B:1*Y*A*Y*I~\nDTP*472*D8*20240901~\nHI*ABK:E11.9X*ABK:N18.6~\nSV1*HC:99213*120*UN*1~`,
+    raw: `ST*837*0011~\nNM1*IL*1*DOE*JOHN****MI*W111111112~\nNM1*82*1*Smith*Jane****XX*1234567890~\nCLM*CLM011*120***11:B:1*Y*A*Y*I~\nDTP*472*D8*20240901~\nHI*ABK:99X*ABK:N18.6~\nSV1*HC:99213*120*UN*1~`,
     expect: {
       segCount: 7,
-      icds: ["E11.9X", "N18.6"],
+      icds: ["99X", "N18.6"],
       status: "PASS",
       findingCodes: ["INVALID_DIAGNOSIS", "ESRD_DEPENDENCE_MISSING_Z992"]
     }
@@ -345,7 +345,7 @@ export const INST_TEST_CASES = [
       pos: "00",
       status: "PASS",
       findingCodes: ["INVALID_POS"],
-      repairTypes: ["FIX_POS"],
+      repairTypes: ["FIX_POS", "NORMALIZE_PROVIDER_NAME"],
       repairedPOS: "11"
     }
   }

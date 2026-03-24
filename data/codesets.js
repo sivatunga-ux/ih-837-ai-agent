@@ -48,6 +48,17 @@ export const CODESET_TABLES = {
     "J3590",
     "J9999"
   ]),
+  HCPCS_CPT_MODIFIERS: asUpperSet([
+    "25",
+    "26",
+    "59",
+    "76",
+    "77",
+    "91",
+    "95",
+    "GT",
+    "TC"
+  ]),
   HIPPS: asUpperSet([
     "HHAA1",
     "HHRB2",
@@ -72,7 +83,8 @@ export const CODESET_TABLES = {
 export const CODE_QUALIFIERS = {
   HI_DIAGNOSIS: new Set(["ABK", "ABF", "ABJ", "ABN", "APR"]),
   HI_PROCEDURE: new Set(["BBR", "BBQ", "BBP"]),
-  SV_PROCEDURE: new Set(["HC", "HP"]),
+  SV1_PROCEDURE: new Set(["HC"]),
+  SV2_PROCEDURE: new Set(["HC", "HP"]),
   NDC_PRODUCT_ID: new Set(["N4"])
 };
 

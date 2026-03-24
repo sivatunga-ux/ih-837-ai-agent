@@ -124,6 +124,18 @@ function parseComposite(segmentValue) {
   };
 }
 
+function parseSv1Procedure(segmentValue) {
+  const raw = String(segmentValue || "").trim();
+  if (!raw) return { qualifier: "", code: "", modifiers: [], raw };
+  const parts = raw.split(":").map((p) => normalizeCode(p));
+  return {
+    qualifier: parts[0] || "",
+    code: parts[1] || "",
+    modifiers: parts.slice(2).filter(Boolean),
+    raw
+  };
+}
+
 function map837SegsToInternalModel(segs) {
   const model = {
     memberId: getSubscriberId(segs),
@@ -154,11 +166,12 @@ function map837SegsToInternalModel(segs) {
 
     if (seg.startsWith("SV1*")) {
       const parts = seg.split("*");
-      const proc = parseComposite(parts[1] || "");
+      const proc = parseSv1Procedure(parts[1] || "");
       currentServiceLine = {
         segment: "SV1",
         procedureQualifier: proc.qualifier,
-        procedureCode: proc.code
+        procedureCode: proc.code,
+        modifiers: proc.modifiers
       };
       model.serviceLines.push(currentServiceLine);
       continue;
@@ -230,15 +243,59 @@ function runSnipValidation(segs, model, findings) {
     });
   }
 
-  const invalidSvQualifiers = unique(model.serviceLines
+  const invalidSv1Qualifiers = unique(model.serviceLines
+    .filter((line) => line.segment === "SV1")
     .map((line) => line.procedureQualifier)
-    .filter((qualifier) => qualifier && !CODE_QUALIFIERS.SV_PROCEDURE.has(qualifier)));
+    .filter((qualifier) => qualifier && !CODE_QUALIFIERS.SV1_PROCEDURE.has(qualifier)));
+  if (invalidSv1Qualifiers.length) {
+    findings.push({
+      level: "WARN",
+      type: "SNIP_LEVEL2",
+      code: "SNIP_L2_INVALID_SV1_QUALIFIER",
+      msg: `Unsupported SV1 code qualifier(s): ${invalidSv1Qualifiers.join(", ")}.`
+    });
+  }
+
+  const invalidSv2Qualifiers = unique(model.serviceLines
+    .filter((line) => line.segment === "SV2")
+    .map((line) => line.procedureQualifier)
+    .filter((qualifier) => qualifier && !CODE_QUALIFIERS.SV2_PROCEDURE.has(qualifier)));
+  if (invalidSv2Qualifiers.length) {
+    findings.push({
+      level: "WARN",
+      type: "SNIP_LEVEL2",
+      code: "SNIP_L2_INVALID_SV2_QUALIFIER",
+      msg: `Unsupported SV2 code qualifier(s): ${invalidSv2Qualifiers.join(", ")}.`
+    });
+  }
+
+  const invalidSvQualifiers = unique([
+    ...invalidSv1Qualifiers,
+    ...invalidSv2Qualifiers
+  ]);
   if (invalidSvQualifiers.length) {
     findings.push({
       level: "WARN",
       type: "SNIP_LEVEL2",
       code: "SNIP_L2_INVALID_SV_QUALIFIER",
       msg: `Unsupported service-line code qualifier(s): ${invalidSvQualifiers.join(", ")}.`
+    });
+  }
+
+  const invalidSv1Modifiers = [];
+  for (const line of model.serviceLines) {
+    if (line.segment !== "SV1") continue;
+    const mods = line.modifiers || [];
+    for (const mod of mods) {
+      if (!CODESET_TABLES.HCPCS_CPT_MODIFIERS.has(mod)) invalidSv1Modifiers.push(mod);
+    }
+  }
+  if (invalidSv1Modifiers.length) {
+    findings.push({
+      level: "WARN",
+      type: "SNIP_LEVEL4_CODESET",
+      code: "SNIP_L4_INVALID_CPT_HCPCS_MODIFIER",
+      msg: `SV1 modifier(s) not found in CPT/HCPCS modifier table: ${unique(invalidSv1Modifiers).join(", ")}.`
     });
   }
 

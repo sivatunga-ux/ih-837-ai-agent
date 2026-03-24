@@ -452,3 +452,65 @@ td{font-size:13px}
   font-size:12px;font-weight:800;
 }
 .mapStat b{color:var(--blue);font-size:16px;margin-right:4px}
+
+/* ── Delimiter Config ── */
+.delimGrid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;
+}
+.delimCard{
+  display:flex;gap:14px;align-items:flex-start;
+  border:1px solid var(--line);border-radius:12px;padding:14px;
+  background:#fbfdff;
+}
+.delimSymbol{
+  width:42px;height:42px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(47,102,224,.10);color:var(--blue);
+  font-family:var(--mono);font-weight:900;font-size:22px;
+  flex-shrink:0;
+}
+.delimInfo{flex:1;min-width:0}
+.delimName{font-weight:900;font-size:13px}
+.delimPurpose{font-size:12px;color:var(--muted);margin-top:2px}
+.delimMeta{font-size:11px;color:var(--text);margin-top:6px}
+.delimMeta code{
+  font-family:var(--mono);font-size:11px;
+  background:#f1f5f9;padding:1px 4px;border-radius:4px;
+}
+.delimMeta mark{
+  background:rgba(245,158,11,.25);font-weight:900;border-radius:2px;padding:0 1px;
+}
+.delimNote{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.3}
+.delimResultItem{
+  display:flex;align-items:center;gap:10px;
+  border:1px solid var(--line);border-radius:10px;padding:10px 14px;
+  font-size:13px;font-weight:700;
+}
+
+/* ── Test Results ── */
+.testCase{
+  border:1px solid var(--line);border-radius:12px;
+  margin-bottom:8px;overflow:hidden;
+}
+.testCaseHead{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;cursor:pointer;user-select:none;
+  font-size:13px;
+}
+.testCaseHead:hover{background:#f8faff}
+.testCaseId{
+  font-family:var(--mono);font-weight:900;font-size:12px;
+  background:#e6ecf5;padding:2px 7px;border-radius:6px;
+}
+.testCaseType{
+  font-size:10px;font-weight:800;text-transform:uppercase;
+  padding:2px 8px;border-radius:6px;
+  background:rgba(47,102,224,.10);color:var(--blue);
+}
+.testCaseName{font-weight:700;flex:1}
+.testCaseBody{display:none;padding:0 14px 10px;overflow:auto}
+.testCase.expanded .testCaseBody{display:block}
+.testPass{background:rgba(34,197,94,.04);border-color:rgba(34,197,94,.25)}
+.testFail{background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.25)}
+.testWarn{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.25);color:#92400e}
+.testFailRow td{background:rgba(239,68,68,.06)}

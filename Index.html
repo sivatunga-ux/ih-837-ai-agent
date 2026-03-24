@@ -416,7 +416,33 @@
           </div>
         </div>
 
+        <!-- Delimiter Configuration -->
         <div class="card">
+          <div class="cardHead">
+            <h2>X12 Delimiter Configuration</h2>
+            <div class="hint">In X12 EDI, delimiters are self-describing — defined by the ISA header itself. Every file declares its own delimiters in the first 106 characters.</div>
+          </div>
+          <div class="cardBody" id="delimiterBody"></div>
+        </div>
+
+        <!-- Test Cases -->
+        <div class="card mt16">
+          <div class="cardHead">
+            <h2>Mapping Validation Test Cases</h2>
+            <div class="pillRow">
+              <button class="btn primary" id="btnRunAllTests">Run All Tests</button>
+              <button class="btn" id="btnRunProTests">837P Tests</button>
+              <button class="btn" id="btnRunInstTests">837I Tests</button>
+              <button class="btn" id="btnRunDelimTests">Delimiter Tests</button>
+            </div>
+          </div>
+          <div class="cardBody" id="testResultsBody">
+            <div class="hint">Click "Run All Tests" to execute the validation test suite against the mapping extractors and delimiter detection.</div>
+          </div>
+        </div>
+
+        <!-- Segment / Element Map -->
+        <div class="card mt16">
           <div class="cardHead">
             <h2 id="mapTitle">837P — Professional (005010X222A1)</h2>
             <div class="hint" id="mapDesc">Health Care Claim: Professional — used by physicians, therapists, outpatient clinics, and other non-institutional providers.</div>

@@ -10,6 +10,8 @@ import { CHANGE_TYPE } from "./data/models.js";
 import { PRO_SAMPLES, INST_SAMPLES } from "./data/samples.js";
 import { MAPPING_837P } from "./data/mapping837P.js";
 import { MAPPING_837I } from "./data/mapping837I.js";
+import { DELIMITER_SPEC, ISA_LAYOUT, SAMPLE_ISA_RAW, detectDelimiters } from "./data/delimiters.js";
+import { runAllTests, runTestsByType } from "./data/testcases837.js";
 import { applyRepairs, computeStatus, joinSegs, splitSegs, summarize, validate837 } from "./rules/validation.js";
 import { addDocToLibrary as addDocToLibraryService, simulateCCD as simulateCCDService } from "./services/docs.js";
 import {
@@ -986,6 +988,139 @@ function mapCollapseAll() {
   document.querySelectorAll(".mapSegHead").forEach(h => { h.classList.remove("open"); h.nextElementSibling.classList.remove("open"); });
 }
 
+/* ---------- Delimiter Config ---------- */
+function renderDelimiterConfig() {
+  const el = document.getElementById("delimiterBody");
+  if (!el) return;
+
+  let html = `<div class="delimGrid">`;
+
+  for (const d of DELIMITER_SPEC) {
+    html += `
+      <div class="delimCard">
+        <div class="delimSymbol">${esc(d.symbol)}</div>
+        <div class="delimInfo">
+          <div class="delimName">${esc(d.name)}</div>
+          <div class="delimPurpose">${esc(d.purpose)}</div>
+          <div class="delimMeta"><b>ISA Position:</b> ${esc(d.isaPosition)}</div>
+          <div class="delimMeta"><b>Example:</b> <code>${d.exampleHighlight}</code></div>
+          <div class="delimNote">${esc(d.notes)}</div>
+        </div>
+      </div>`;
+  }
+  html += `</div>`;
+
+  html += `<h3 class="mt16">ISA Segment Layout (106 characters)</h3>
+    <div class="hint" style="margin-bottom:10px">${esc(ISA_LAYOUT.description)}</div>
+    <div class="tableWrap"><table><thead><tr><th>Pos</th><th>Field</th><th>Description</th></tr></thead><tbody>`;
+
+  for (const p of ISA_LAYOUT.positions) {
+    const cls = p.delimiter ? ' style="background:rgba(47,102,224,.08);font-weight:900"' : "";
+    html += `<tr${cls}>
+      <td style="font-family:var(--mono);white-space:nowrap">${esc(p.range)}</td>
+      <td style="font-weight:800">${esc(p.label)}</td>
+      <td>${esc(p.desc)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  html += `<h3 class="mt16">Live Delimiter Detection</h3>
+    <div class="hint" style="margin-bottom:8px">Paste an ISA header (or full 837 file) to auto-detect its delimiters.</div>
+    <textarea id="delimInput" class="textarea" rows="3" placeholder="Paste ISA segment here…" style="font-family:var(--mono);font-size:12px">${esc(SAMPLE_ISA_RAW)}</textarea>
+    <div class="row mt8">
+      <button class="btn primary" id="btnDetectDelim">Detect Delimiters</button>
+    </div>
+    <div id="delimDetectResult" class="mt12"></div>`;
+
+  el.innerHTML = html;
+
+  document.getElementById("btnDetectDelim").onclick = () => {
+    const input = document.getElementById("delimInput").value;
+    const result = detectDelimiters(input);
+    const resEl = document.getElementById("delimDetectResult");
+    let rhtml = `<div class="delimGrid">`;
+    const items = [
+      { label: "Element Separator", val: result.element },
+      { label: "Sub-Element Separator", val: result.subElement },
+      { label: "Segment Terminator", val: result.segment },
+      { label: "Repetition Separator", val: result.repetition }
+    ];
+    for (const it of items) {
+      rhtml += `<div class="delimResultItem"><span class="delimSymbol" style="font-size:18px">${esc(it.val)}</span><span>${esc(it.label)}</span></div>`;
+    }
+    rhtml += `</div>`;
+    if (result.detected) {
+      rhtml += `<div class="testPass mt8" style="padding:8px 12px;border-radius:10px">Delimiters successfully detected from ISA header.</div>`;
+    } else {
+      rhtml += `<div class="testFail mt8" style="padding:8px 12px;border-radius:10px">Could not detect from ISA — using defaults.</div>`;
+    }
+    for (const e of result.errors) {
+      rhtml += `<div class="testWarn mt8" style="padding:6px 12px;border-radius:8px;font-size:12px">${esc(e)}</div>`;
+    }
+    resEl.innerHTML = rhtml;
+  };
+}
+
+/* ---------- Test Runner ---------- */
+function renderTestResults(results) {
+  const el = document.getElementById("testResultsBody");
+  if (!el) return;
+
+  const total = results.length;
+  const passed = results.filter(r => r.pass).length;
+  const failed = total - passed;
+
+  let html = `
+    <div class="mapStats" style="margin-bottom:14px">
+      <div class="mapStat"><b>${total}</b> Total</div>
+      <div class="mapStat" style="border-color:#22c55e"><b style="color:#16a34a">${passed}</b> Passed</div>
+      ${failed ? `<div class="mapStat" style="border-color:#ef4444"><b style="color:#dc2626">${failed}</b> Failed</div>` : ""}
+    </div>`;
+
+  for (const r of results) {
+    const icon = r.pass ? "✅" : "❌";
+    const cls = r.pass ? "testPass" : "testFail";
+
+    let checksHtml = "";
+    for (const c of r.checks) {
+      const cIcon = c.ok ? "✅" : "❌";
+      const actual = typeof c.actual === "object" ? JSON.stringify(c.actual) : String(c.actual);
+      const expected = typeof c.expected === "object" ? JSON.stringify(c.expected) : String(c.expected);
+      checksHtml += `<tr class="${c.ok ? "" : "testFailRow"}">
+        <td>${cIcon}</td>
+        <td style="font-weight:700">${esc(c.label)}</td>
+        <td style="font-family:var(--mono);font-size:11px">${esc(expected)}</td>
+        <td style="font-family:var(--mono);font-size:11px">${esc(actual)}</td>
+      </tr>`;
+    }
+
+    html += `<div class="testCase ${cls}">
+      <div class="testCaseHead">
+        <span>${icon}</span>
+        <span class="testCaseId">${esc(r.id)}</span>
+        <span class="testCaseType">${esc(r.type)}</span>
+        <span class="testCaseName">${esc(r.name)}</span>
+      </div>
+      <div class="testCaseBody">
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th></th><th>Check</th><th>Expected</th><th>Actual</th></tr></thead>
+            <tbody>${checksHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+
+  el.querySelectorAll(".testCaseHead").forEach(h => {
+    h.onclick = () => {
+      h.parentElement.classList.toggle("expanded");
+    };
+  });
+}
+
 /* ---------- Tabs ---------- */
 function setTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -1000,6 +1135,7 @@ function setTab(name) {
     renderProviderQuerySamples();
   }
   if (name === "mapping") {
+    renderDelimiterConfig();
     renderMapping(currentMapping, document.getElementById("mapSearchInput")?.value || "");
   }
 }
@@ -1114,6 +1250,11 @@ function wireUI() {
   document.getElementById("btnMapInst").onclick = () => { renderMapping(MAPPING_837I); };
   document.getElementById("btnMapExpandAll").onclick = mapExpandAll;
   document.getElementById("btnMapCollapseAll").onclick = mapCollapseAll;
+
+  document.getElementById("btnRunAllTests").onclick = () => renderTestResults(runAllTests());
+  document.getElementById("btnRunProTests").onclick = () => renderTestResults(runTestsByType("837P"));
+  document.getElementById("btnRunInstTests").onclick = () => renderTestResults(runTestsByType("837I"));
+  document.getElementById("btnRunDelimTests").onclick = () => renderTestResults(runTestsByType("Delimiter"));
 
   document.getElementById("btnSimulateCCD").onclick = () => {
     const memberId = (document.getElementById("docMemberId").value || "").trim() || "UNKNOWN";

@@ -4,17 +4,9 @@
  */
 
 import { ingestFile } from "./claimIngest.js";
-
-let validateClaimForConversion, getFieldMap, generate837Fn, validate837Fn, computeStatusFn;
-try {
-  ({ validateClaimForConversion, getFieldMap } = await import("./claimMapper.js"));
-} catch { /* claimMapper not yet implemented */ }
-try {
-  ({ generate837: generate837Fn } = await import("./edi837Generator.js"));
-} catch { /* edi837Generator not yet implemented */ }
-try {
-  ({ validate837: validate837Fn, computeStatus: computeStatusFn } = await import("../rules/validation.js"));
-} catch { /* validation module unavailable */ }
+import { validateClaimForConversion, getFieldMap } from "./claimMapper.js";
+import { generate837 as generate837Fn } from "./edi837Generator.js";
+import { validate837 as validate837Fn, computeStatus as computeStatusFn } from "../rules/validation.js";
 
 // Converts from the ingest DB format (providers[], diagnoses[]) to the
 // flat structure expected by claimMapper / edi837Generator.

@@ -1,0 +1,16 @@
+{
+  "repo_path": "/workspace",
+  "branch": "cursor/x12-edi-parser-analysis-8ccd",
+  "logs_dir": "/workspace/encounters-data-analysis/ops/daily-refresh-agent/logs",
+  "tests": {
+    "run_python_tests": false,
+    "python_test_path": "encounters-data-analysis/ops/daily-refresh-agent/tests"
+  },
+  "web": {
+    "run_web_smoke": true,
+    "web_entry_file": "Index.html"
+  },
+  "git": {
+    "strict_fail_on_dirty_repo": false
+  }
+}

@@ -12,6 +12,10 @@ import { MAPPING_837P } from "./data/mapping837P.js";
 import { MAPPING_837I } from "./data/mapping837I.js";
 import { DELIMITER_SPEC, ISA_LAYOUT, SAMPLE_ISA_RAW, detectDelimiters } from "./data/delimiters.js";
 import { runAllTests, runTestsByType } from "./data/testcases837.js";
+import { ClaimsDB, SAMPLE_CLAIMS } from "./data/claimsdb.js";
+import { SAMPLE_CSV, SAMPLE_JSON, SAMPLE_XML } from "./services/claimIngest.js";
+import { ConversionAgent, AGENT_STEPS } from "./services/conversionAgent.js";
+import { getFieldMap } from "./services/claimMapper.js";
 import { applyRepairs, computeStatus, joinSegs, splitSegs, summarize, validate837 } from "./rules/validation.js";
 import { addDocToLibrary as addDocToLibraryService, simulateCCD as simulateCCDService } from "./services/docs.js";
 import {
@@ -1121,6 +1125,144 @@ function renderTestResults(results) {
   });
 }
 
+/* ---------- 837 Generator Agent ---------- */
+const claimsDb = new ClaimsDB();
+let lastEdiOutput = "";
+let lastPipelineResults = null;
+
+function renderGenDbBrowser() {
+  const statsEl = document.getElementById("genDbStats");
+  const bodyEl = document.getElementById("genDbBody");
+  if (!statsEl || !bodyEl) return;
+
+  const stats = claimsDb.getStats();
+  statsEl.textContent = `${stats.claims} claims • ${stats.serviceLines} service lines • ${stats.diagnoses} diagnoses`;
+
+  const claims = claimsDb.getAllClaims();
+  if (!claims.length) {
+    bodyEl.innerHTML = `<div class="empty">No claims stored yet. Load claims via the agent pipeline above.</div>`;
+    return;
+  }
+
+  let html = "";
+  for (const c of claims.slice(0, 50)) {
+    const sub = claimsDb.getFullClaim(c.id);
+    const name = sub?.subscriber ? `${sub.subscriber.lastName || ""}, ${sub.subscriber.firstName || ""}` : c.patientControlNumber;
+    html += `<div class="claimRow" data-claimid="${c.id}">
+      <span class="claimRowType">${esc(c.claimType || "837P")}</span>
+      <span class="claimRowId">${esc(c.patientControlNumber || c.id)}</span>
+      <span class="claimRowName">${esc(name)} • $${esc(String(c.totalChargeAmount || 0))}</span>
+      <span class="claimRowStatus ${esc(c.status || "DRAFT")}">${esc(c.status || "DRAFT")}</span>
+    </div>`;
+  }
+  bodyEl.innerHTML = html;
+
+  bodyEl.querySelectorAll(".claimRow").forEach(row => {
+    row.onclick = () => {
+      const id = row.getAttribute("data-claimid");
+      const full = claimsDb.getFullClaim(id);
+      if (full) openModal("Claim Detail: " + (full.patientControlNumber || id), JSON.stringify(full, null, 2));
+    };
+  });
+}
+
+function renderAgentPipeline(steps) {
+  const el = document.getElementById("genPipelineBody");
+  if (!el) return;
+
+  let html = "";
+  for (const step of steps) {
+    const icon = step.status === "success" ? "✅" :
+                 step.status === "warning" ? "⚠️" :
+                 step.status === "error" ? "❌" :
+                 step.status === "running" ? "⏳" : "⬜";
+    const cls = step.status || "pending";
+    const time = step.duration != null ? `${step.duration}ms` : "";
+    html += `<div class="agentStep ${cls}">
+      <span class="agentStepIcon">${icon}</span>
+      <div class="agentStepInfo">
+        <div class="agentStepName">${esc(step.name || step.stepId)}</div>
+        <div class="agentStepMsg">${esc(step.message || step.desc || "")}</div>
+      </div>
+      <span class="agentStepTime">${esc(time)}</span>
+    </div>`;
+  }
+
+  if (lastPipelineResults?.summary) {
+    const s = lastPipelineResults.summary;
+    html += `<div class="agentSummary">
+      <div style="font-weight:900;margin-bottom:8px">Pipeline Summary</div>
+      <div class="hint">Claims processed: <b>${s.claimsProcessed || 0}</b> • Errors: <b>${s.errors || 0}</b> • EDI segments: <b>${s.ediSegments || 0}</b> • Total time: <b>${s.totalDuration || 0}ms</b></div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function renderFieldMap(claimType) {
+  const el = document.getElementById("genFieldMapBody");
+  if (!el) return;
+  const map = getFieldMap(claimType);
+  if (!map) { el.innerHTML = `<div class="empty">No field map for ${claimType}</div>`; return; }
+
+  let html = "";
+  for (const [section, fields] of Object.entries(map)) {
+    html += `<h3 class="mt12" style="text-transform:capitalize">${esc(section)}</h3>`;
+    html += `<div class="tableWrap mt8"><table class="fieldMapTable"><thead><tr><th>DB Field</th><th>EDI Segment</th><th>EDI Element</th><th>Default</th></tr></thead><tbody>`;
+    for (const f of fields) {
+      html += `<tr>
+        <td>${esc(f.dbField)}</td>
+        <td>${esc(f.ediSegment)}</td>
+        <td>${esc(f.ediElement)}</td>
+        <td>${esc(f.default || "")}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function runGeneratorAgent() {
+  const fileText = document.getElementById("genInputText")?.value || "";
+  const claimType = document.getElementById("genClaimType")?.value || "837P";
+  const ediOut = document.getElementById("genEdiOutput");
+  const dlBtn = document.getElementById("btnGenDownload");
+  const copyBtn = document.getElementById("btnGenCopyEDI");
+  const sendBtn = document.getElementById("btnGenSendToValidator");
+
+  if (!fileText.trim()) { toast("Paste or load claim data first."); return; }
+
+  const pendingSteps = AGENT_STEPS.map(s => ({ ...s, status: "pending" }));
+  renderAgentPipeline(pendingSteps);
+
+  const agent = new ConversionAgent(claimsDb);
+  const results = await agent.runPipeline(fileText, "input_file", claimType, {});
+  lastPipelineResults = results;
+
+  renderAgentPipeline(results.steps);
+  renderGenDbBrowser();
+
+  if (results.ediOutput) {
+    lastEdiOutput = results.ediOutput;
+    ediOut.textContent = results.ediOutput;
+    dlBtn.disabled = false;
+    copyBtn.disabled = false;
+    sendBtn.disabled = false;
+
+    addAudit("837_GENERATED", {
+      claimType,
+      claims: results.claims?.length || 0,
+      segments: results.summary?.ediSegments || 0,
+      errors: results.errors?.length || 0
+    });
+    addNotif("837 Generated", `Generated ${claimType} EDI with ${results.summary?.ediSegments || 0} segments.`);
+    toast("837 EDI generated successfully");
+  } else {
+    ediOut.textContent = "Generation failed.\n\nErrors:\n" + (results.errors || []).join("\n");
+    toast("Generation failed — see errors");
+  }
+}
+
 /* ---------- Tabs ---------- */
 function setTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -1137,6 +1279,9 @@ function setTab(name) {
   if (name === "mapping") {
     renderDelimiterConfig();
     renderMapping(currentMapping, document.getElementById("mapSearchInput")?.value || "");
+  }
+  if (name === "generator") {
+    renderGenDbBrowser();
   }
 }
 
@@ -1250,6 +1395,72 @@ function wireUI() {
   document.getElementById("btnMapInst").onclick = () => { renderMapping(MAPPING_837I); };
   document.getElementById("btnMapExpandAll").onclick = mapExpandAll;
   document.getElementById("btnMapCollapseAll").onclick = mapCollapseAll;
+
+  // 837 Generator wiring
+  document.getElementById("btnGenLoadCSV").onclick = () => {
+    document.getElementById("genInputText").value = SAMPLE_CSV;
+    toast("Sample CSV loaded");
+  };
+  document.getElementById("btnGenLoadJSON").onclick = () => {
+    document.getElementById("genInputText").value = SAMPLE_JSON;
+    toast("Sample JSON loaded");
+  };
+  document.getElementById("btnGenLoadXML").onclick = () => {
+    document.getElementById("genInputText").value = SAMPLE_XML;
+    toast("Sample XML loaded");
+  };
+  document.getElementById("genFileInput").onchange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const text = await new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ""));
+      r.readAsText(files[0]);
+    });
+    document.getElementById("genInputText").value = text;
+    toast(`Loaded ${files[0].name}`);
+    e.target.value = "";
+  };
+  document.getElementById("btnGenRunAgent").onclick = runGeneratorAgent;
+  document.getElementById("btnGenClearDB").onclick = () => {
+    claimsDb.clearAll();
+    renderGenDbBrowser();
+    document.getElementById("genEdiOutput").textContent = "No EDI output yet.";
+    document.getElementById("btnGenDownload").disabled = true;
+    document.getElementById("btnGenCopyEDI").disabled = true;
+    document.getElementById("btnGenSendToValidator").disabled = true;
+    lastEdiOutput = "";
+    lastPipelineResults = null;
+    document.getElementById("genPipelineBody").innerHTML = `<div class="empty">Run the agent to see the pipeline trace.</div>`;
+    toast("Claims DB cleared");
+  };
+  document.getElementById("btnGenDownload").onclick = () => {
+    if (!lastEdiOutput) return;
+    const blob = new Blob([lastEdiOutput], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ct = document.getElementById("genClaimType")?.value || "837P";
+    a.download = `generated_${ct}_${Date.now()}.edi`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 400);
+    toast("EDI file downloaded");
+  };
+  document.getElementById("btnGenCopyEDI").onclick = async () => {
+    if (!lastEdiOutput) return;
+    try { await navigator.clipboard.writeText(lastEdiOutput); toast("EDI copied to clipboard"); }
+    catch { toast("Copy failed"); }
+  };
+  document.getElementById("btnGenSendToValidator").onclick = () => {
+    if (!lastEdiOutput) return;
+    loadedInputs = [{ name: "generated_837.edi", text: lastEdiOutput }];
+    saveJSON(STORE.loaded, loadedInputs);
+    toast("Sent to validator — switch to 837 Ingestion tab");
+    setTab("ingestion");
+    renderLoaded();
+  };
+  document.getElementById("btnShowMapP").onclick = () => renderFieldMap("837P");
+  document.getElementById("btnShowMapI").onclick = () => renderFieldMap("837I");
 
   document.getElementById("btnRunAllTests").onclick = () => renderTestResults(runAllTests());
   document.getElementById("btnRunProTests").onclick = () => renderTestResults(runTestsByType("837P"));

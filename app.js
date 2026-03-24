@@ -1500,7 +1500,15 @@ function renderAll() {
 }
 
 /* ---------- Init ---------- */
-document.addEventListener("DOMContentLoaded", () => {
+function initApp() {
   wireUI();
   renderAll();
-});
+}
+
+// Handle both cases: module loads before or after DOMContentLoaded
+if (document.readyState === 'loading') {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  // DOM already loaded, init immediately
+  initApp();
+}

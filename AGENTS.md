@@ -28,6 +28,10 @@ Then open `http://localhost:5501/Index.html` in a browser.
 2. Click **Run Validation** — KPIs (Runs, Errors Fixed, RA Blocks) should update.
 3. Click **Create Work Actions** — navigates to the Workqueue with created actions.
 
+### Claims Search prototype
+
+A standalone app in `claims-search/`. Access at `http://localhost:5501/claims-search/index.html` (same static server as main app). It imports `searchConfig.js`, `searchEngine.js`, and `sampleData.js` as ES modules. The app auto-generates 250 deterministic sample claims at load time and renders a three-column search UI (search panel / results table / detail panel).
+
 ### Notes
 
 - There are no automated tests, linters, or build scripts in this repo. Validation is manual via the browser.

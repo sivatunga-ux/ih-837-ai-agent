@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping
 
 
-class Severity(str, Enum):
+class RuleSeverity(str, Enum):
     INFO = "INFO"
     WARN = "WARN"
     ERROR = "ERROR"
@@ -13,17 +12,21 @@ class Severity(str, Enum):
 
 
 @dataclass(frozen=True)
-class ValidationFinding:
+class RuleResult:
     rule_code: str
-    severity: Severity
+    severity: RuleSeverity
     message: str
     field_path: str | None = None
     is_blocking: bool = False
 
 
 @dataclass(frozen=True)
-class ClaimValidationContext:
-    claim: Mapping[str, Any]
-    lines: list[Mapping[str, Any]]
-    diagnoses: list[Mapping[str, Any]]
+class ValidationReport:
+    status: str
+    findings: list[RuleResult]
+
+
+# Backward compatible aliases.
+Severity = RuleSeverity
+ValidationFinding = RuleResult
 

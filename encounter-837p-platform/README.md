@@ -46,8 +46,11 @@ Starter repository for an 837 encounter validation platform.
 - Procedure checks automatically target codesets tagged with procedure purpose.
 - Existing behavior remains unchanged when no repository is passed.
 
-Example:
-- `python3 agents/run_validation_agent.py --claim-file examples/purpose_driven_claim_sample.json`
+Examples:
+- Single file:
+  - `python3 agents/run_validation_agent.py --input-file examples/purpose_driven_claim_sample.json --output-file reports/agent_validation_output.json`
+- Directory of claims (recursive `*.json` scan) with consolidated markdown summary:
+  - `python3 agents/run_validation_agent.py --input-dir examples --output-file reports/agent_validation_output.json --summary-file reports/agent_validation_output.md`
 
 ## Phase 4 snapshot logic (coverage + address)
 

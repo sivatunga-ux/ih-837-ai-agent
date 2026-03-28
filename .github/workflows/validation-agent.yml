@@ -32,8 +32,9 @@ jobs:
         working-directory: encounter-837p-platform
         run: |
           python agents/run_validation_agent.py \
-            --input-file examples/purpose_driven_claim_sample.json \
-            --output-file reports/agent_validation_output.json
+            --input-dir examples \
+            --output-file reports/agent_validation_output.json \
+            --summary-file reports/agent_validation_output.md
 
       - name: Upload validation agent artifact
         uses: actions/upload-artifact@v4

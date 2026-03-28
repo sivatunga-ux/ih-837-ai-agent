@@ -15,6 +15,7 @@ class CodeValidationInput:
     code_system: str
     code: str
     field_path: str
+    purpose: str | None = None
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class CodesetRelease:
     effective_start: date
     effective_end: date
     codes: set[str]
+    purpose: str | None = None
 
     @property
     def version_label(self) -> str:
@@ -86,4 +88,38 @@ def validate_codes(*, repo: InMemoryCodesetRepository, checks: list[CodeValidati
         if result is not None:
             findings.append(result)
     return findings
+
+
+def build_repository_from_catalog_rows(
+    rows: list[dict],
+) -> InMemoryCodesetRepository:
+    """
+    Build a consistent in-memory repository from generic catalog rows.
+    Expected row shape:
+      {
+        "codeset_name": str,
+        "release_year": int,
+        "release_phase": str,
+        "effective_start": date,
+        "effective_end": date,
+        "codes": set[str] | list[str],
+        "purpose": str | None,
+      }
+    """
+    repo = InMemoryCodesetRepository()
+    for row in rows:
+        codes_raw = row.get("codes", set())
+        codes = set(codes_raw) if not isinstance(codes_raw, set) else codes_raw
+        repo.add_release(
+            CodesetRelease(
+                codeset_name=str(row["codeset_name"]),
+                release_year=int(row["release_year"]),
+                release_phase=str(row["release_phase"]),
+                effective_start=row["effective_start"],
+                effective_end=row["effective_end"],
+                codes={str(code).strip().upper() for code in codes if str(code).strip()},
+                purpose=row.get("purpose"),
+            )
+        )
+    return repo
 

@@ -93,6 +93,16 @@ Examples:
 4. Dry run (download + parse + CSV export only):
    - `python3 -m platform_837p.codesets.load_icd10 --start-year 2026 --end-year 2026 --download-dir ./downloads/icd10 --emit-csv-only`
 
+## Multi-codeset lookup and validation consistency
+
+- Shared codeset validation path:
+  - `platform_837p/codesets/validator.py`
+- Purpose-driven catalog bootstrap:
+  - `platform_837p/codesets/catalog.py`
+- Additional consistency tests:
+  - `tests_py/test_codeset_catalog.py`
+  - `tests_py/test_codeset_all_consistency.py`
+
 ## Project guardrails
 
 - Deterministic validation rules are source of truth.

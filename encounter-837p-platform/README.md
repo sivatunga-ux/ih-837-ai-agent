@@ -61,6 +61,25 @@ Starter repository for an 837 encounter validation platform.
   - `templates/codesets/codeset_entries.template.csv`
   - `templates/codesets/codeset_validation_policy.template.yaml`
 
+## ICD-10 external codeset loading (CMS)
+
+- New migration for codeset catalog/version/entries and load runs:
+  - `db/migrations/0004_external_codesets_icd10.sql`
+- CMS ICD-10 downloader/parser and loader:
+  - `platform_837p/codesets/cms_icd10.py`
+  - `platform_837p/codesets/load_icd10.py`
+
+Examples:
+
+1. Plan migrations:
+   - `python3 -m platform_837p.db.migrate --plan`
+2. Apply migrations:
+   - `DATABASE_URL=postgresql://... python3 -m platform_837p.db.migrate`
+3. Download + load ICD-10-CM and ICD-10-PCS for FY range:
+   - `DATABASE_URL=postgresql://... python3 -m platform_837p.codesets.load_icd10 --start-year 2024 --end-year 2026 --download-dir ./downloads/icd10`
+4. Dry run (download + parse + CSV export only):
+   - `python3 -m platform_837p.codesets.load_icd10 --start-year 2026 --end-year 2026 --download-dir ./downloads/icd10 --emit-csv-only`
+
 ## Project guardrails
 
 - Deterministic validation rules are source of truth.

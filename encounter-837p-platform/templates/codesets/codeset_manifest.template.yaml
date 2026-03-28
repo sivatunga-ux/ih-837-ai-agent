@@ -1,0 +1,38 @@
+schema_version: 1
+codeset_id: "<ICD10CM|CPT|HCPCS|NDC|POS>"
+codeset_name: "<human-readable name>"
+publisher: "<CMS|AMA|CDC|internal>"
+version_label: "<e.g. 2026.01>"
+effective_from: "2026-01-01"
+effective_to: null
+source:
+  uri: "<source URL or file reference>"
+  checksum_sha256: "<sha256 of source artifact>"
+  license: "<license terms>"
+ingestion:
+  delimiter: ","
+  header: true
+  code_column: "code"
+  description_column: "description"
+  effective_from_column: "effective_from"
+  effective_to_column: "effective_to"
+  extra_columns:
+    - "status"
+validation_policy:
+  strict_code_presence: true
+  strict_effective_date: true
+  unknown_code_severity: "ERROR"
+  inactive_code_severity: "ERROR"
+  format_error_severity: "ERROR"
+  deprecated_code_severity: "WARN"
+compatibility:
+  applies_to_transactions:
+    - "837P"
+  applies_to_rule_levels:
+    - "SNIP5"
+change_control:
+  owner_team: "platform-data"
+  approved_by: "<approver>"
+  approved_at: "2026-01-10T12:00:00Z"
+  ticket_ref: "<JIRA/issue id>"
+

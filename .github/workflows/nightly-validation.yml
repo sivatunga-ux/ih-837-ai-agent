@@ -1,0 +1,99 @@
+name: Nightly Validation
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-and-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r encounter-837p-platform/requirements-dev.txt
+
+      - name: Prepare report directories
+        run: |
+          mkdir -p reports/current
+          mkdir -p reports/previous
+
+      - name: Download previous nightly artifact
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: nightly-validation.yml
+          name: nightly-validation-report
+          path: reports/previous
+          if_no_artifact_found: warn
+
+      - name: Run JavaScript tests (capture)
+        working-directory: encounter-837p-platform
+        run: |
+          set +e
+          npm test > ../reports/current/js_test_output.log 2>&1
+          echo $? > ../reports/current/js_exit_code.txt
+          set -e
+
+      - name: Run Python tests (capture)
+        working-directory: encounter-837p-platform
+        run: |
+          set +e
+          python -m pytest tests_py > ../reports/current/python_test_output.log 2>&1
+          echo $? > ../reports/current/python_exit_code.txt
+          set -e
+
+      - name: Build nightly validation report
+        run: |
+          PREV_JSON=""
+          if [ -f reports/previous/summary.json ]; then
+            PREV_JSON="--previous-json reports/previous/summary.json"
+          fi
+          python scripts/nightly_validation_report.py \
+            --python-log reports/current/python_test_output.log \
+            --js-log reports/current/js_test_output.log \
+            --python-exit "$(cat reports/current/python_exit_code.txt)" \
+            --js-exit "$(cat reports/current/js_exit_code.txt)" \
+            $PREV_JSON \
+            --output-json reports/current/summary.json \
+            --output-md reports/current/summary.md
+
+      - name: Publish job summary
+        run: cat reports/current/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload nightly report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-validation-report
+          path: reports/current
+          if-no-files-found: error
+
+      - name: Fail workflow if tests failed
+        run: |
+          JS_CODE="$(cat reports/current/js_exit_code.txt)"
+          PY_CODE="$(cat reports/current/python_exit_code.txt)"
+          if [ "$JS_CODE" -ne 0 ] || [ "$PY_CODE" -ne 0 ]; then
+            echo "Validation failed: JS=$JS_CODE PY=$PY_CODE"
+            exit 1
+          fi

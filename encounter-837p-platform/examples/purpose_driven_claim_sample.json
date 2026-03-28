@@ -1,0 +1,27 @@
+{
+  "claims": [
+    {
+      "claim_id": "40000000-0000-0000-0000-000000009999",
+      "member_id": "10000000-0000-0000-0000-000000000001",
+      "servicing_provider_npi": "1234567890",
+      "diagnoses": ["E119", "I10"],
+      "lines": [
+        {
+          "procedure_code": "99213",
+          "modifiers": ["25"]
+        }
+      ]
+    },
+    {
+      "claim_id": "40000000-0000-0000-0000-000000009998",
+      "member_id": "10000000-0000-0000-0000-000000000001",
+      "servicing_provider_npi": "1234567890",
+      "diagnoses": ["INVALIDDX"],
+      "lines": [
+        {
+          "procedure_code": "INVALIDPROC"
+        }
+      ]
+    }
+  ]
+}

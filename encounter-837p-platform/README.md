@@ -52,6 +52,16 @@ Examples:
 - Directory of claims (recursive `*.json` scan) with consolidated markdown summary:
   - `python3 agents/run_validation_agent.py --input-dir examples --output-file reports/agent_validation_output.json --summary-file reports/agent_validation_output.md`
 
+## UI review mode (IHAS example)
+
+- The UI now ships with an IHAS-style sample based on X12 005010X222 Example 01
+  (commercial health insurance) for reviewer-friendly walkthroughs.
+- Use `Load sample` in `ui/index.html` to populate the full sample EDI text.
+- A structured **IHAS review view** renders:
+  - Parties (submitter/receiver/provider/subscriber/patient/payer)
+  - Claim details (claim ID, total, POS, trace, diagnoses)
+  - Service lines (line number, procedure code, charge, DOS)
+
 ## Phase 4 snapshot logic (coverage + address)
 
 - Snapshot service: `platform_837p/snapshot/service.py`

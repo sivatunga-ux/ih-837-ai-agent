@@ -52,6 +52,15 @@ Starter repository for an 837 encounter validation platform.
 - New seed data: `db/seeds/0002_seed_submission_job_file.sql`
 - Tests: `tests_py/test_submission_service.py`
 
+## Phase 8 hardening kickoff docs
+
+- Hardening plan + sub-agent task map: `docs/phase8/PHASE8_HARDENING_PLAN.md`
+- External codeset validation SOP: `docs/phase8/EXTERNAL_CODESET_VALIDATION_GUIDE.md`
+- Codeset templates:
+  - `templates/codesets/codeset_manifest.template.yaml`
+  - `templates/codesets/codeset_entries.template.csv`
+  - `templates/codesets/codeset_validation_policy.template.yaml`
+
 ## Project guardrails
 
 - Deterministic validation rules are source of truth.

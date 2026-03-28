@@ -1,0 +1,33 @@
+version: 1
+policy_name: "claim_validation_default"
+description: "Default external codeset validation policy for 837P."
+
+enforcement:
+  default_mode: "ERROR"   # ERROR | WARN
+  stop_on_missing_codeset: true
+  require_effective_dates: true
+
+lookups:
+  - field_path: "claim.lines[].procedure_code"
+    codeset: "CPT"
+    on_invalid: "ERROR"
+    on_inactive: "ERROR"
+    on_expired: "ERROR"
+
+  - field_path: "claim.diagnoses[]"
+    codeset: "ICD10CM"
+    on_invalid: "ERROR"
+    on_inactive: "ERROR"
+    on_expired: "ERROR"
+
+  - field_path: "claim.lines[].modifier[]"
+    codeset: "HCPCS_MODIFIER"
+    on_invalid: "WARN"
+    on_inactive: "WARN"
+    on_expired: "WARN"
+
+reporting:
+  include_codeset_version_in_findings: true
+  include_effective_window_in_findings: true
+  emit_summary_counters: true
+

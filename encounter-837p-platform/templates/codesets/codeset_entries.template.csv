@@ -1,0 +1,7 @@
+codeset_name,version,code,description,effective_start,effective_end,status
+ICD10CM,2026.01,E119,Type 2 diabetes mellitus without complications,2026-01-01,,ACTIVE
+ICD10CM,2026.01,I10,Essential (primary) hypertension,2026-01-01,,ACTIVE
+ICD10CM,2026.01,N186,End stage renal disease,2026-01-01,,ACTIVE
+ICD10CM,2026.01,Z992,Dependence on renal dialysis,2026-01-01,,ACTIVE
+CPT,2026.01,99213,Office or other outpatient visit established patient level 3,2026-01-01,,ACTIVE
+CPT,2026.01,99214,Office or other outpatient visit established patient level 4,2026-01-01,,ACTIVE

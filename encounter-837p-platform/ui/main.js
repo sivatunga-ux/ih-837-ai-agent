@@ -1,66 +1,69 @@
 import { APP_NAME } from "../data/constants.js";
-import { PRO_SAMPLES } from "../data/samples.js";
-import { summarize, validate837 } from "../rules/validation.js";
-import { getAdvisoryRecommendations } from "../agent/advisory.js";
+import { SAMPLE_ENCOUNTERS } from "../data/samples.js";
+import { validate837 } from "../rules/validation.js";
+import { summarizeFindingsForCoder } from "../agent/advisory.js";
 
 const appNameEl = document.getElementById("appName");
-const inputEl = document.getElementById("claimInput");
-const outputEl = document.getElementById("resultOutput");
+const inputEl = document.getElementById("encounterInput");
+const outputEl = document.getElementById("findingsOutput");
 const advisoriesEl = document.getElementById("advisoryOutput");
-const runBtn = document.getElementById("runValidation");
+const runBtn = document.getElementById("validate");
 const loadBtn = document.getElementById("loadSample");
 
 if (appNameEl) appNameEl.textContent = APP_NAME;
 
 function renderResult(payload) {
+  if (!outputEl) return;
   const lines = [
-    `Member ID: ${payload.memberId || "UNKNOWN"}`,
-    `Status: ${payload.summary.status}`,
-    `Fatal: ${payload.summary.fatal}`,
-    `RA blocks: ${payload.summary.raBlocks}`,
-    `Warnings: ${payload.summary.warns}`,
-    "",
-    "Findings:"
+    `Findings: ${payload.findings.length}`,
+    ""
   ];
 
-  payload.findings.forEach((finding, index) => {
-    lines.push(
-      `${index + 1}. [${finding.level}] ${finding.code} - ${finding.msg}`
-    );
-  });
+  if (!payload.findings.length) {
+    lines.push("No deterministic findings.");
+  } else {
+    payload.findings.forEach((finding, index) => {
+      lines.push(
+        `${index + 1}. [${finding.level}] ${finding.code} - ${finding.msg}`
+      );
+    });
+  }
 
   outputEl.textContent = lines.join("\n");
 }
 
 function renderAdvisories(findings) {
-  const recommendations = getAdvisoryRecommendations(findings);
-  if (!recommendations.length) {
+  if (!advisoriesEl) return;
+  const advisory = summarizeFindingsForCoder({ findings });
+  if (!advisory) {
     advisoriesEl.textContent = "No advisory recommendations.";
     return;
   }
 
-  advisoriesEl.textContent = recommendations
-    .map((item, index) => `${index + 1}. ${item}`)
-    .join("\n");
+  advisoriesEl.textContent = [
+    `Severity: ${advisory.severity}`,
+    `Recommendation: ${advisory.recommendation}`,
+    `Rationale: ${advisory.rationale}`,
+  ].join("\n");
 }
 
-runBtn.addEventListener("click", () => {
+if (runBtn && inputEl) {
+  runBtn.addEventListener("click", () => {
   const input = inputEl.value.trim();
   if (!input) {
-    outputEl.textContent = "Paste claim text before running validation.";
-    advisoriesEl.textContent = "No advisory recommendations.";
+    if (outputEl) outputEl.textContent = "Paste claim text before running validation.";
+    if (advisoriesEl) advisoriesEl.textContent = "No advisory recommendations.";
     return;
   }
 
   const result = validate837(input);
-  const summary = summarize(result.findings);
-  renderResult({
-    ...result,
-    summary
-  });
+  renderResult(result);
   renderAdvisories(result.findings);
 });
+}
 
-loadBtn.addEventListener("click", () => {
-  inputEl.value = PRO_SAMPLES[0].text;
-});
+if (loadBtn && inputEl) {
+  loadBtn.addEventListener("click", () => {
+    inputEl.value = SAMPLE_ENCOUNTERS[0]?.text ?? "";
+  });
+}

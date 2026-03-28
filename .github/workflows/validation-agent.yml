@@ -1,0 +1,43 @@
+name: Validation Agent (on change)
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  run-validation-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r encounter-837p-platform/requirements-dev.txt
+
+      - name: Run unit tests (python)
+        working-directory: encounter-837p-platform
+        run: python -m pytest tests_py -q
+
+      - name: Run purpose-driven validation agent sample
+        working-directory: encounter-837p-platform
+        run: |
+          python agents/run_validation_agent.py \
+            --input-file examples/purpose_driven_claim_sample.json \
+            --output-file reports/agent_validation_output.json
+
+      - name: Upload validation agent artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-agent-output
+          path: encounter-837p-platform/reports
+          if-no-files-found: error

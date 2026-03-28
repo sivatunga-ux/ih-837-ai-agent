@@ -24,6 +24,7 @@ class RuleResult:
 class ValidationReport:
     status: str
     findings: list[RuleResult]
+    parser_issues: list[str] | None = None
 
 
 # Backward compatible aliases.

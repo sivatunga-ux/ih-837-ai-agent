@@ -38,6 +38,17 @@ Starter repository for an 837 encounter validation platform.
 - Default ruleset: `platform_837p/validation/ruleset.py`
 - Tests: `tests_py/test_validation_engine.py`
 
+### Purpose-driven codeset validation wiring
+
+- `default_ruleset()` now supports optional purpose-driven codeset checks when
+  a codeset repository and service date are provided.
+- Diagnosis checks automatically target codesets tagged with diagnosis purpose.
+- Procedure checks automatically target codesets tagged with procedure purpose.
+- Existing behavior remains unchanged when no repository is passed.
+
+Example:
+- `python3 agents/run_validation_agent.py --claim-file examples/purpose_driven_claim_sample.json`
+
 ## Phase 4 snapshot logic (coverage + address)
 
 - Snapshot service: `platform_837p/snapshot/service.py`
@@ -102,6 +113,21 @@ Examples:
 - Additional consistency tests:
   - `tests_py/test_codeset_catalog.py`
   - `tests_py/test_codeset_all_consistency.py`
+
+## Purpose-driven rules + validation agent
+
+- Validation ruleset now supports optional purpose-driven external codeset checks:
+  - `platform_837p/validation/ruleset.py`
+  - Use `default_ruleset(codeset_repo=...)` to enable codeset checks.
+- Validation agent runner:
+  - `agents/run_validation_agent.py`
+- Sample input:
+  - `examples/purpose_driven_claim_sample.json`
+- Agent output examples:
+  - `reports/agent_validation_output.json`
+  - `reports/agent_validation_output.md`
+- CI workflow (runs on every push and PR):
+  - `.github/workflows/validation-agent.yml`
 
 ## Project guardrails
 

@@ -61,6 +61,19 @@ Starter repository for an 837 encounter validation platform.
   - `templates/codesets/codeset_entries.template.csv`
   - `templates/codesets/codeset_validation_policy.template.yaml`
 
+## 837 parser learnings adoption (from Java example patterns)
+
+- New parser package with typed models and chunked parse flow:
+  - `platform_837p/parser/models.py`
+  - `platform_837p/parser/service.py`
+- Parser capabilities:
+  - claim + line extraction from EDI text
+  - parsing issue collection
+  - `parse(max_claims=...)` chunking behavior similar to iterative parser workflows
+  - parser metadata (`get_version()`, `get_license_info()`)
+- Tests:
+  - `tests_py/test_parser_service.py`
+
 ## ICD-10 external codeset loading (CMS)
 
 - New migration for codeset catalog/version/entries and load runs:

@@ -82,7 +82,6 @@ Scope policy:
 - Regression testing is limited to individual components (module-level) by default.
 - Full integration testing is a separate pipeline/activity and should not be bundled into every component change unless explicitly requested.
 - If no component test suite exists, the owner agent must add a minimal baseline suite in the same task before code changes are considered complete.
-
 ## Termination Criteria
 
 Stop an agent when:

@@ -4,6 +4,8 @@
 import { SAMPLE_CLAIMS, BILLING_PROVIDERS, RENDERING_PROVIDERS, MEMBERS } from "./sampleClaims.js";
 import { runPipeline } from "./pipeline.js";
 import * as analytics from "./analyticsEngine.js";
+import { DxAnalyticsAgent, generateMemberHistory, COMORBIDITY_RULES, CONDITION_SIGNIFICANCE_REGISTRY } from "./dxAnalytics.js";
+import { AnomalyTracker } from "./anomalyTracker.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STATE
@@ -11,6 +13,9 @@ import * as analytics from "./analyticsEngine.js";
 
 let pipelineResult = null;
 let activeTab = "overview";
+let dxAnalytics = null;
+let anomalyTracker = null;
+let dxResults = null;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UTILITIES
@@ -853,6 +858,528 @@ function postRenderPipelineTrace() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TAB: DX OVERVIEW
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderDxOverview() {
+  if (!dxResults) return '<div class="empty"><div>Run the pipeline first to see Dx analytics</div></div>';
+
+  const vol = dxResults.volume;
+  const qual = dxResults.qualifiers;
+  const chronicGapCount = dxResults.chronicGaps.length;
+  const totalAnomalies = dxResults.anomalies.total;
+  const resolved = anomalyTracker ? anomalyTracker.anomalies.filter(a => a.status === "RESOLVED").length : 0;
+  const resolutionRate = totalAnomalies > 0 ? (resolved / totalAnomalies) * 100 : 0;
+  const comorbGaps = dxResults.comorbidityGaps.anomalies.length;
+  const singleDxFlagged = vol.singleDxPct > 30;
+
+  const histVol = dxAnalytics.history.length > 0
+    ? dxAnalytics.history.reduce((s, c) => s + (c.diagnoses || []).length, 0)
+    : null;
+  const trendLabel = histVol !== null ? `vs ${fmt(histVol)} historical` : "current batch";
+
+  const kpis = [
+    { icon: "🔢", value: fmt(vol.totalDx), label: "Total Dx", change: trendLabel, changeClass: "neutral" },
+    { icon: "🧬", value: fmt(vol.uniqueDx), label: "Unique Codes", change: `${vol.maxDxOnClaim} max/claim`, changeClass: "neutral" },
+    { icon: "📊", value: String(vol.avgDxPerClaim), label: "Avg Dx/Claim", change: `median ${vol.medianDxPerClaim}`, changeClass: "neutral" },
+    { icon: "⚠️", value: fmt(vol.singleDxClaims), label: "Single-Dx Claims", change: fmtPct(vol.singleDxPct) + (singleDxFlagged ? " ⚠ flagged" : ""), changeClass: singleDxFlagged ? "down" : "up" },
+    { icon: "🔗", value: fmt(comorbGaps), label: "Comorbidity Gaps", change: `${COMORBIDITY_RULES.filter(r => r.active).length} rules active`, changeClass: comorbGaps > 0 ? "down" : "up" },
+    { icon: "📅", value: fmt(chronicGapCount), label: "Chronic Gaps", change: "from member history", changeClass: chronicGapCount > 0 ? "down" : "up" },
+    { icon: "🚨", value: fmt(totalAnomalies), label: "Total Anomalies", change: `P1:${dxResults.anomalies.p1.length} P2:${dxResults.anomalies.p2.length} P3:${dxResults.anomalies.p3.length}`, changeClass: totalAnomalies > 0 ? "down" : "up" },
+    { icon: "✅", value: fmtPct(resolutionRate), label: "Resolution Rate", change: `${resolved} resolved`, changeClass: "neutral" },
+  ];
+
+  let html = `<div class="kpiGrid">${kpis.map(k => `
+    <div class="kpiCard">
+      <div class="kpiIcon">${k.icon}</div>
+      <div class="kpiValue">${esc(k.value)}</div>
+      <div class="kpiLabel">${esc(k.label)}</div>
+      <div class="kpiChange ${k.changeClass}">${esc(k.change)}</div>
+    </div>`).join("")}</div>`;
+
+  const qualMax = Math.max(qual.abk, qual.abf, 1);
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Qualifier Breakdown (ABK vs ABF)</div></div><div class="cardBody">`;
+  html += renderBarChart([
+    { label: `ABK (Principal) — ${qual.abk}`, value: qual.abk },
+    { label: `ABF (Other) — ${qual.abf}`, value: qual.abf },
+  ], { color: "blue" });
+  html += `</div></div>`;
+
+  const distData = vol.dxDistribution.map(d => ({ label: `${d.count} Dx`, value: d.claims }));
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Dx per Claim Distribution</div></div><div class="cardBody">${renderBarChart(distData, { color: "teal" })}</div></div>`;
+
+  const catData = dxResults.categories.map(c => ({ label: `${c.chapter} — ${c.name}`, value: c.count }));
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">ICD-10 Chapter Breakdown</div></div><div class="cardBody">${renderBarChart(catData, { color: "purple" })}</div></div>`;
+
+  const topPrincipal = dxResults.topPrincipal.map(d => ({ label: `${d.code} — ${d.name}`, value: d.count }));
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Top 20 Principal Dx (ABK)</div></div><div class="cardBody">${renderBarChart(topPrincipal, { color: "red" })}</div></div>`;
+
+  return html;
+}
+
+function postRenderDxOverview() {}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: GAPS & ANOMALIES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderDxGaps() {
+  if (!dxResults) return '<div class="empty"><div>Run the pipeline first to see Dx analytics</div></div>';
+
+  const anomalies = dxResults.anomalies;
+  const totalRAFImpact = [...anomalies.p1, ...anomalies.p2, ...anomalies.p3]
+    .reduce((s, a) => s + (a.estimatedRevenue || 0), 0);
+
+  const kpis = [
+    { icon: "🚨", value: fmt(anomalies.total), label: "Total Anomalies", change: "all priorities", changeClass: "neutral" },
+    { icon: "🔴", value: fmt(anomalies.bySeverity.HIGH || 0), label: "HIGH Severity", change: "immediate review", changeClass: "down" },
+    { icon: "🟡", value: fmt(anomalies.bySeverity.MEDIUM || 0), label: "MEDIUM Severity", change: "review recommended", changeClass: "neutral" },
+    { icon: "🟢", value: fmt(anomalies.bySeverity.LOW || 0), label: "LOW Severity", change: "informational", changeClass: "up" },
+    { icon: "💰", value: fmtCur(totalRAFImpact), label: "Est. RAF Impact", change: "potential revenue", changeClass: "neutral" },
+  ];
+
+  let html = `<div class="kpiGrid">${kpis.map(k => `
+    <div class="kpiCard">
+      <div class="kpiIcon">${k.icon}</div>
+      <div class="kpiValue">${esc(k.value)}</div>
+      <div class="kpiLabel">${esc(k.label)}</div>
+      <div class="kpiChange ${k.changeClass}">${esc(k.change)}</div>
+    </div>`).join("")}</div>`;
+
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Comorbidity Rule Summary</div></div><div class="cardBody noPad"><div id="dxRuleSummaryTable"></div></div></div>`;
+
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Top Chronic Gap Conditions</div></div><div class="cardBody noPad"><div id="dxChronicGapTable"></div></div></div>`;
+
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Anomaly List (first 50)</div></div><div class="cardBody noPad"><div id="dxAnomalyListTable"></div></div></div>`;
+
+  return html;
+}
+
+function postRenderDxGaps() {
+  if (!dxResults) return;
+
+  const allAnomalies = [...dxResults.anomalies.p1, ...dxResults.anomalies.p2, ...dxResults.anomalies.p3];
+  const gapsByRule = {};
+  for (const a of allAnomalies) {
+    if (!gapsByRule[a.ruleId]) gapsByRule[a.ruleId] = { count: 0, revenue: 0 };
+    gapsByRule[a.ruleId].count++;
+    gapsByRule[a.ruleId].revenue += a.estimatedRevenue || 0;
+  }
+
+  const ruleRows = COMORBIDITY_RULES.map(r => ({
+    ruleId: r.id,
+    ruleName: r.name,
+    severity: r.severity,
+    gapsFound: gapsByRule[r.id]?.count || 0,
+    estRevenue: Math.round((gapsByRule[r.id]?.revenue || 0) * 100) / 100,
+    active: r.active ? "Yes" : "No",
+    _id: r.id,
+  }));
+
+  renderSortableTable("dxRuleSummaryTable",
+    [
+      { key: "ruleId", label: "Rule ID", mono: true },
+      { key: "ruleName", label: "Rule Name" },
+      { key: "severity", label: "Severity" },
+      { key: "gapsFound", label: "Gaps Found", numeric: true, format: "number" },
+      { key: "estRevenue", label: "Est. Revenue Impact", numeric: true, format: "currency" },
+      { key: "active", label: "Active" },
+    ],
+    ruleRows
+  );
+
+  const chronicGaps = dxResults.chronicGaps;
+  const condMap = {};
+  for (const g of chronicGaps) {
+    const key = g.code;
+    if (!condMap[key]) condMap[key] = { condition: g.missingCondition, code: g.code, hcc: g.hcc || "—", members: 0, totalTimes: 0 };
+    condMap[key].members++;
+    condMap[key].totalTimes += g.timesInHistory;
+  }
+  const condRows = Object.values(condMap).map(c => ({
+    ...c,
+    avgTimes: c.members > 0 ? Math.round((c.totalTimes / c.members) * 10) / 10 : 0,
+    _id: c.code,
+  })).sort((a, b) => b.members - a.members);
+
+  renderSortableTable("dxChronicGapTable",
+    [
+      { key: "condition", label: "Condition" },
+      { key: "code", label: "Code", mono: true },
+      { key: "hcc", label: "HCC" },
+      { key: "members", label: "Members Affected", numeric: true, format: "number" },
+      { key: "avgTimes", label: "Avg Times in History", numeric: true },
+    ],
+    condRows
+  );
+
+  const anomalyRows = allAnomalies.slice(0, 50).map((a, i) => ({
+    ...a,
+    id: a.ruleId + "-" + (a.claimId || i),
+    rule: a.ruleName,
+    member: a.memberName || a.memberId || "—",
+    provider: a.billingProvider || "—",
+    serviceDate: a.serviceDate || "—",
+    estRAF: a.estimatedRAF || 0,
+    _id: String(i),
+    _triggerDx: (a.triggerDx || []).join(", "),
+    _expectedDx: a.expectedDx || "—",
+    _description: a.description || "—",
+  }));
+
+  const container = document.getElementById("dxAnomalyListTable");
+  if (!container) return;
+
+  let thtml = '<div class="tableWrap"><table><thead><tr>';
+  const cols = ["ID", "Rule", "Member", "Provider", "Service Date", "Severity", "Priority", "Est. RAF", "Status"];
+  for (const c of cols) thtml += `<th>${esc(c)}</th>`;
+  thtml += "</tr></thead><tbody>";
+
+  for (const row of anomalyRows) {
+    const sevColor = row.severity === "HIGH" ? "red" : row.severity === "MEDIUM" ? "amber" : "green";
+    thtml += `<tr class="clickable" data-anomaly-idx="${esc(row._id)}">`;
+    thtml += `<td class="mono">${esc(row.id)}</td>`;
+    thtml += `<td>${esc(row.rule)}</td>`;
+    thtml += `<td>${esc(row.member)}</td>`;
+    thtml += `<td class="mono">${esc(row.provider)}</td>`;
+    thtml += `<td>${fmtDate(row.serviceDate)}</td>`;
+    thtml += `<td><span class="pill ${sevColor}">${esc(row.severity)}</span></td>`;
+    thtml += `<td>P${row.priority}</td>`;
+    thtml += `<td class="num">${row.estRAF.toFixed(3)}</td>`;
+    thtml += `<td>${esc(row.status)}</td>`;
+    thtml += `</tr>`;
+    thtml += `<tr class="anomalyDetail collapsed" id="anomalyDetail-${esc(row._id)}"><td colspan="9" style="background:#f8fafc;padding:12px 16px;font-size:13px">`;
+    thtml += `<strong>Trigger Dx:</strong> ${esc(row._triggerDx)}<br>`;
+    thtml += `<strong>Expected Dx:</strong> ${esc(row._expectedDx)}<br>`;
+    thtml += `<strong>Description:</strong> ${esc(row._description)}`;
+    thtml += `</td></tr>`;
+  }
+
+  thtml += "</tbody></table></div>";
+  container.innerHTML = thtml;
+
+  container.querySelectorAll("tr.clickable[data-anomaly-idx]").forEach(tr => {
+    tr.addEventListener("click", () => {
+      const detail = document.getElementById("anomalyDetail-" + tr.dataset.anomalyIdx);
+      if (detail) detail.classList.toggle("collapsed");
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: PROVIDER QUALITY (DX)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderDxProviders() {
+  if (!dxResults) return '<div class="empty"><div>Run the pipeline first to see Dx analytics</div></div>';
+
+  const pq = dxResults.providerQuality;
+  const sorted = [...pq].sort((a, b) => a.completenessScore - b.completenessScore);
+  const chartData = sorted.map(p => ({ label: `${p.npi} — ${p.name}`, value: p.completenessScore }));
+
+  let html = `<div class="card"><div class="cardHead"><div class="cardTitle">Billing Provider Scorecard</div></div><div class="cardBody noPad"><div id="dxProviderScorecardTable"></div></div></div>`;
+
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Provider Completeness Scores (sorted)</div></div><div class="cardBody">${renderBarChart(chartData, { color: "blue" })}</div></div>`;
+
+  const underReporters = dxResults.underReporters;
+  if (underReporters.length > 0) {
+    html += `<div class="card"><div class="cardHead"><div class="cardTitle">⚠️ Under-Reporters (Avg Dx &lt; 2.0)</div></div><div class="cardBody noPad"><div id="dxUnderReporterTable"></div></div></div>`;
+  }
+
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Rendering Provider Summary</div></div><div class="cardBody noPad"><div id="dxRenderingProviderTable"></div></div></div>`;
+
+  return html;
+}
+
+function postRenderDxProviders() {
+  if (!dxResults) return;
+
+  const pq = dxResults.providerQuality;
+  const comorbGaps = dxResults.comorbidityGaps.anomalies;
+  const gapsByProvider = {};
+  for (const a of comorbGaps) {
+    gapsByProvider[a.billingProvider] = (gapsByProvider[a.billingProvider] || 0) + 1;
+  }
+
+  const rows = [...pq].sort((a, b) => a.completenessScore - b.completenessScore).map(p => ({
+    npi: p.npi,
+    name: p.name,
+    claims: p.claims,
+    avgDxPerClaim: p.avgDxPerClaim,
+    singleDxPct: p.singleDxPct,
+    completenessScore: p.completenessScore,
+    gapCount: gapsByProvider[p.npi] || 0,
+    _id: p.npi,
+  }));
+
+  const container = document.getElementById("dxProviderScorecardTable");
+  if (container) {
+    let thtml = '<div class="tableWrap"><table><thead><tr>';
+    const cols = ["NPI", "Name", "Claims", "Avg Dx/Claim", "Single-Dx%", "Completeness Score", "Gap Count"];
+    for (const c of cols) thtml += `<th>${esc(c)}</th>`;
+    thtml += "</tr></thead><tbody>";
+    for (const row of rows) {
+      const scoreColor = row.completenessScore > 80 ? "#22c55e" : row.completenessScore >= 60 ? "#eab308" : "#ef4444";
+      thtml += `<tr>`;
+      thtml += `<td class="mono">${esc(row.npi)}</td>`;
+      thtml += `<td>${esc(row.name)}</td>`;
+      thtml += `<td class="num">${fmt(row.claims)}</td>`;
+      thtml += `<td class="num">${row.avgDxPerClaim}</td>`;
+      thtml += `<td class="num">${fmtPct(row.singleDxPct)}</td>`;
+      thtml += `<td class="num"><span style="display:inline-block;padding:2px 10px;border-radius:4px;color:#fff;font-weight:600;background:${scoreColor}">${row.completenessScore}</span></td>`;
+      thtml += `<td class="num">${fmt(row.gapCount)}</td>`;
+      thtml += `</tr>`;
+    }
+    thtml += "</tbody></table></div>";
+    container.innerHTML = thtml;
+  }
+
+  const underReporters = dxResults.underReporters;
+  if (underReporters.length > 0) {
+    renderSortableTable("dxUnderReporterTable",
+      [
+        { key: "npi", label: "NPI", mono: true },
+        { key: "name", label: "Name" },
+        { key: "claims", label: "Claims", numeric: true, format: "number" },
+        { key: "avgDxPerClaim", label: "Avg Dx/Claim", numeric: true },
+        { key: "singleDxPct", label: "Single-Dx%", numeric: true, format: "percent" },
+        { key: "completenessScore", label: "Score", numeric: true },
+      ],
+      underReporters.map(p => ({ ...p, _id: p.npi }))
+    );
+  }
+
+  const rq = dxResults.renderingQuality;
+  renderSortableTable("dxRenderingProviderTable",
+    [
+      { key: "npi", label: "NPI", mono: true },
+      { key: "name", label: "Name" },
+      { key: "claims", label: "Claims", numeric: true, format: "number" },
+      { key: "avgDxPerClaim", label: "Avg Dx/Claim", numeric: true },
+      { key: "singleDxPct", label: "Single-Dx%", numeric: true, format: "percent" },
+      { key: "completenessScore", label: "Score", numeric: true },
+    ],
+    rq.map(p => ({ ...p, _id: p.npi }))
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: ACTION TRACKER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderDxActions() {
+  if (!dxResults || !anomalyTracker) return '<div class="empty"><div>Run the pipeline first to see Dx analytics</div></div>';
+
+  const summary = anomalyTracker.getSummary();
+  const openCount = (summary.byStatus.DETECTED || 0) + (summary.byStatus.ASSIGNED || 0);
+  const resolvedCount = summary.byStatus.RESOLVED || 0;
+
+  let html = `<div class="card" style="margin-bottom:12px"><div class="cardBody" style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:14px;font-weight:600">`;
+  html += `<span style="color:#ef4444">🔴 P1: ${summary.byPriority[1] || 0}</span>`;
+  html += `<span style="color:#eab308">🟡 P2: ${summary.byPriority[2] || 0}</span>`;
+  html += `<span style="color:#22c55e">🟢 P3: ${summary.byPriority[3] || 0}</span>`;
+  html += `<span>| Open: ${openCount}</span>`;
+  html += `<span>| Resolved: ${resolvedCount}</span>`;
+  html += `</div></div>`;
+
+  html += `<div class="card" style="margin-bottom:12px"><div class="cardBody" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">`;
+  html += `<button class="btn dxFilterBtn active" data-filter="all">All</button>`;
+  html += `<button class="btn dxFilterBtn" data-filter="open">Open</button>`;
+  html += `<button class="btn dxFilterBtn" data-filter="p1">P1</button>`;
+  html += `<button class="btn dxFilterBtn" data-filter="p2">P2</button>`;
+  html += `<button class="btn dxFilterBtn" data-filter="p3">P3</button>`;
+
+  const providers = new Set();
+  const rules = new Set();
+  for (const a of anomalyTracker.anomalies) {
+    if (a.billingProvider) providers.add(a.billingProvider);
+    rules.add(a.ruleId);
+  }
+
+  html += `<select id="dxFilterProvider" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:4px;font-size:13px"><option value="">All Providers</option>`;
+  for (const p of [...providers].sort()) html += `<option value="${esc(p)}">${esc(p)}</option>`;
+  html += `</select>`;
+
+  html += `<select id="dxFilterRule" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:4px;font-size:13px"><option value="">All Rules</option>`;
+  for (const r of [...rules].sort()) html += `<option value="${esc(r)}">${esc(r)}</option>`;
+  html += `</select>`;
+
+  html += `</div></div>`;
+
+  html += `<div class="card"><div class="cardHead"><div class="cardTitle">Worklist</div></div><div class="cardBody noPad"><div id="dxWorklistTable"></div></div></div>`;
+
+  html += `<div class="card"><div class="cardHead"><button class="treeToggle" data-tree="resolvedSection"><span class="arrow">▶</span> Resolved Items (${resolvedCount})</button></div><div class="treeChildren collapsed" id="resolvedSection"><div id="dxResolvedTable" style="padding:0"></div></div></div>`;
+
+  return html;
+}
+
+let _dxActionFilter = "all";
+let _dxProviderFilter = "";
+let _dxRuleFilter = "";
+
+function renderWorklistTable() {
+  if (!anomalyTracker) return;
+
+  const filters = {};
+  if (_dxActionFilter === "open") {
+    filters.status = ["DETECTED", "ASSIGNED"];
+  } else if (_dxActionFilter === "p1") {
+    filters.priority = 1;
+  } else if (_dxActionFilter === "p2") {
+    filters.priority = 2;
+  } else if (_dxActionFilter === "p3") {
+    filters.priority = 3;
+  }
+  if (_dxProviderFilter) filters.providerId = _dxProviderFilter;
+  if (_dxRuleFilter) filters.ruleId = _dxRuleFilter;
+
+  const worklist = anomalyTracker.getWorklist(filters).filter(a => a.status !== "RESOLVED");
+  const container = document.getElementById("dxWorklistTable");
+  if (!container) return;
+
+  const statusPill = (status) => {
+    const colors = { DETECTED: "#94a3b8", ASSIGNED: "#3b82f6", RESOLVED: "#22c55e", DEFERRED: "#eab308" };
+    const bg = colors[status] || "#94a3b8";
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;color:#fff;font-size:12px;font-weight:600;background:${bg}">${esc(status)}</span>`;
+  };
+
+  const prioIcon = (p) => p === 1 ? "🔴" : p === 2 ? "🟡" : "🟢";
+
+  let thtml = '<div class="tableWrap"><table><thead><tr>';
+  const cols = ["", "ID", "Rule", "Member", "Provider", "Service Date", "Severity", "Est. RAF ($)", "Status", "Actions"];
+  for (const c of cols) thtml += `<th>${esc(c)}</th>`;
+  thtml += "</tr></thead><tbody>";
+
+  for (const a of worklist) {
+    thtml += `<tr>`;
+    thtml += `<td>${prioIcon(a.priority)}</td>`;
+    thtml += `<td class="mono">${esc(a.id)}</td>`;
+    thtml += `<td>${esc(a.ruleName || a.ruleId)}</td>`;
+    thtml += `<td>${esc(a.memberName || a.memberId || "—")}</td>`;
+    thtml += `<td class="mono">${esc(a.billingProvider || "—")}</td>`;
+    thtml += `<td>${fmtDate(a.serviceDate || "")}</td>`;
+    thtml += `<td>${esc(a.severity)}</td>`;
+    thtml += `<td class="num">${fmtCur(a.estimatedRevenue || 0)}</td>`;
+    thtml += `<td>${statusPill(a.status)}</td>`;
+    thtml += `<td style="white-space:nowrap">`;
+    thtml += `<button class="btn dxActionBtn" data-action="assign" data-id="${esc(a.id)}" style="font-size:11px;padding:2px 6px;margin:1px">Assign</button>`;
+    thtml += `<button class="btn dxActionBtn" data-action="resolve" data-id="${esc(a.id)}" style="font-size:11px;padding:2px 6px;margin:1px">Resolve</button>`;
+    thtml += `<button class="btn dxActionBtn" data-action="defer" data-id="${esc(a.id)}" style="font-size:11px;padding:2px 6px;margin:1px">Defer</button>`;
+    thtml += `</td>`;
+    thtml += `</tr>`;
+  }
+
+  thtml += "</tbody></table></div>";
+  container.innerHTML = thtml;
+
+  container.querySelectorAll(".dxActionBtn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === "assign") {
+        anomalyTracker.assign(id, "Current User");
+        showToast(`Assigned ${id}`);
+      } else if (action === "resolve") {
+        anomalyTracker.resolve(id, "CORRECTED");
+        showToast(`Resolved ${id}`);
+      } else if (action === "defer") {
+        anomalyTracker.defer(id, "Deferred by user");
+        showToast(`Deferred ${id}`);
+      }
+      renderWorklistTable();
+      renderResolvedTable();
+      updateActionSummary();
+    });
+  });
+}
+
+function renderResolvedTable() {
+  if (!anomalyTracker) return;
+  const resolved = anomalyTracker.getWorklist({ status: "RESOLVED" });
+  const container = document.getElementById("dxResolvedTable");
+  if (!container) return;
+
+  if (resolved.length === 0) {
+    container.innerHTML = '<div style="padding:16px;color:#94a3b8">No resolved items yet</div>';
+    return;
+  }
+
+  renderSortableTable("dxResolvedTable",
+    [
+      { key: "id", label: "ID", mono: true },
+      { key: "ruleName", label: "Rule" },
+      { key: "memberName", label: "Member" },
+      { key: "severity", label: "Severity" },
+      { key: "resolution", label: "Resolution" },
+    ],
+    resolved.map(a => ({ ...a, memberName: a.memberName || a.memberId || "—", _id: a.id }))
+  );
+}
+
+function updateActionSummary() {
+  if (!anomalyTracker) return;
+  const summary = anomalyTracker.getSummary();
+  const openCount = (summary.byStatus.DETECTED || 0) + (summary.byStatus.ASSIGNED || 0);
+  const resolvedCount = summary.byStatus.RESOLVED || 0;
+
+  const toggleBtn = document.querySelector('[data-tree="resolvedSection"]');
+  if (toggleBtn) {
+    const arrow = toggleBtn.querySelector(".arrow");
+    const arrowHTML = arrow ? arrow.outerHTML : '<span class="arrow">▶</span>';
+    toggleBtn.innerHTML = `${arrowHTML} Resolved Items (${resolvedCount})`;
+  }
+}
+
+function postRenderDxActions() {
+  if (!dxResults || !anomalyTracker) return;
+
+  _dxActionFilter = "all";
+  _dxProviderFilter = "";
+  _dxRuleFilter = "";
+
+  renderWorklistTable();
+  renderResolvedTable();
+
+  document.querySelectorAll(".dxFilterBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".dxFilterBtn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      _dxActionFilter = btn.dataset.filter;
+      renderWorklistTable();
+    });
+  });
+
+  const provSelect = document.getElementById("dxFilterProvider");
+  if (provSelect) {
+    provSelect.addEventListener("change", () => {
+      _dxProviderFilter = provSelect.value;
+      renderWorklistTable();
+    });
+  }
+
+  const ruleSelect = document.getElementById("dxFilterRule");
+  if (ruleSelect) {
+    ruleSelect.addEventListener("change", () => {
+      _dxRuleFilter = ruleSelect.value;
+      renderWorklistTable();
+    });
+  }
+
+  document.querySelectorAll("[data-tree]").forEach(btn => {
+    if (btn.closest("#mainContent")) {
+      btn.addEventListener("click", () => {
+        const target = document.getElementById(btn.dataset.tree);
+        if (!target) return;
+        const arrow = btn.querySelector(".arrow");
+        target.classList.toggle("collapsed");
+        if (arrow) arrow.classList.toggle("open");
+      });
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TAB ROUTER
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -867,6 +1394,10 @@ const tabRenderers = {
   search: { render: renderSearch, postRender: postRenderSearch },
   validation: { render: renderValidation, postRender: postRenderValidation },
   pipeline: { render: renderPipelineTrace, postRender: postRenderPipelineTrace },
+  dxOverview: { render: renderDxOverview, postRender: postRenderDxOverview },
+  dxGaps: { render: renderDxGaps, postRender: postRenderDxGaps },
+  dxProviders: { render: renderDxProviders, postRender: postRenderDxProviders },
+  dxActions: { render: renderDxActions, postRender: postRenderDxActions },
 };
 
 function switchTab(tab) {
@@ -905,6 +1436,12 @@ async function executePipeline() {
 
     status.className = "statusBadge done";
     status.textContent = `✓ Done in ${elapsed}ms — ${pipelineResult.summary.passed} passed, ${pipelineResult.summary.failed} failed`;
+
+    const history = generateMemberHistory(SAMPLE_CLAIMS, 24);
+    dxAnalytics = new DxAnalyticsAgent(SAMPLE_CLAIMS, history);
+    dxResults = dxAnalytics.getFullAnalytics();
+    anomalyTracker = new AnomalyTracker();
+    anomalyTracker.addAnomalies([...dxResults.anomalies.p1, ...dxResults.anomalies.p2, ...dxResults.anomalies.p3]);
 
     showToast(`Pipeline complete: ${pipelineResult.files.length} files generated, ${pipelineResult.summary.total} claims processed in ${elapsed}ms`);
     switchTab(activeTab);

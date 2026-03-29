@@ -32,6 +32,27 @@ Then open `http://localhost:5501/Index.html` in a browser.
 
 A standalone app in `claims-search/`. Access at `http://localhost:5501/claims-search/index.html` (same static server as main app). It imports `searchConfig.js`, `searchEngine.js`, and `sampleData.js` as ES modules. The app auto-generates 250 deterministic sample claims at load time and renders a three-column search UI (search panel / results table / detail panel).
 
+### Encounter Analytics standalone module
+
+A standalone ES module suite in `encounter-analytics/`. Three files — no dependency on the main app:
+
+- `sampleClaims.js` — 500 deterministic sample claims (seeded PRNG) with valid NPIs, MBIs, EINs
+- `pipeline.js` — 6-agent 837P pipeline (ingest → map → validate → template → generate → output-validate)
+- `analyticsEngine.js` — 10 analytics/aggregation functions over pipeline results
+
+Test all three via Node.js (no browser needed):
+
+```sh
+node --input-type=module -e "
+  import { SAMPLE_CLAIMS } from './encounter-analytics/sampleClaims.js';
+  import { runPipeline } from './encounter-analytics/pipeline.js';
+  import { getMonthlyTrend } from './encounter-analytics/analyticsEngine.js';
+  const r = runPipeline(SAMPLE_CLAIMS);
+  console.log(r.summary);
+  console.log(getMonthlyTrend(r));
+"
+```
+
 ### Notes
 
 - There are no automated tests, linters, or build scripts in this repo. Validation is manual via the browser.

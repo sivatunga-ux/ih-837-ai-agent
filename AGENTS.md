@@ -32,15 +32,20 @@ Then open `http://localhost:5501/Index.html` in a browser.
 
 A standalone app in `claims-search/`. Access at `http://localhost:5501/claims-search/index.html` (same static server as main app). It imports `searchConfig.js`, `searchEngine.js`, and `sampleData.js` as ES modules. The app auto-generates 250 deterministic sample claims at load time and renders a three-column search UI (search panel / results table / detail panel).
 
-### Encounter Analytics standalone module
+### Encounter Analytics dashboard & modules
 
-A standalone ES module suite in `encounter-analytics/`. Three files — no dependency on the main app:
+A standalone analytics dashboard in `encounter-analytics/`. Six files — no dependency on the main app:
 
 - `sampleClaims.js` — 500 deterministic sample claims (seeded PRNG) with valid NPIs, MBIs, EINs
 - `pipeline.js` — 6-agent 837P pipeline (ingest → map → validate → template → generate → output-validate)
 - `analyticsEngine.js` — 10 analytics/aggregation functions over pipeline results
+- `index.html` — Dashboard shell with 10-tab navigation, modal overlay, toast notifications
+- `styles.css` — Executive-level blue/slate theme with KPI cards, CSS bar charts, collapsible tree, sortable tables
+- `app.js` — Full application: Overview, Files & 837 Output, Hierarchy View, Provider Analytics, Member Analytics, Monthly Trending, Clinical Analytics, Cross-File Search, Validation Report, Pipeline Trace
 
-Test all three via Node.js (no browser needed):
+Access at `http://localhost:5501/encounter-analytics/index.html` (same static server). Click **Run Pipeline (500 Claims)** to process and see analytics across all tabs.
+
+Test the pipeline modules via Node.js (no browser needed):
 
 ```sh
 node --input-type=module -e "

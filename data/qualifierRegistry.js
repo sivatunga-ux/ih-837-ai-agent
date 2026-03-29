@@ -25,14 +25,14 @@ export const QUALIFIER_REGISTRY = [
   { loop: "ISA", segment: "ISA", element: "ISA03", name: "Security Info Qualifier", usage: "R", values: ["00"], singleValue: true, autoPopulate: true, fileLevel: true, source: "TR3", desc: "00 = No Security Information Present" },
   { loop: "ISA", segment: "ISA", element: "ISA04", name: "Security Information", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "10 blank spaces when ISA03=00", defaultValue: "          " },
   { loop: "ISA", segment: "ISA", element: "ISA05", name: "Interchange ID Qualifier (Sender)", usage: "R", values: ["ZZ"], singleValue: true, autoPopulate: true, fileLevel: true, source: "CMS", desc: "ZZ = Mutually Defined" },
-  { loop: "ISA", segment: "ISA", element: "ISA06", name: "Interchange Sender ID", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "CONFIG", desc: "EN + Contract ID (15 chars, right-padded)", pattern: "^EN[A-Z0-9]+" },
+  { loop: "ISA", segment: "ISA", element: "ISA06", name: "Interchange Sender ID", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "CONFIG", desc: "EN + Contract ID (15 chars, right-padded)", pattern: "^EN[A-Z0-9]+", format: { type: "ID", pattern: "AN15", length: 15, fixedLength: true, padRight: " ", regex: "^EN[A-Z0-9][A-Z0-9 ]{12}$" } },
   { loop: "ISA", segment: "ISA", element: "ISA07", name: "Interchange ID Qualifier (Receiver)", usage: "R", values: ["ZZ"], singleValue: true, autoPopulate: true, fileLevel: true, source: "CMS", desc: "ZZ = Mutually Defined" },
   { loop: "ISA", segment: "ISA", element: "ISA08", name: "Interchange Receiver ID", usage: "R", values: ["80882"], singleValue: true, autoPopulate: true, fileLevel: true, source: "CMS", desc: "CMS Receiver ID (15 chars, right-padded)", defaultValue: "80882          " },
-  { loop: "ISA", segment: "ISA", element: "ISA09", name: "Interchange Date", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "YYMMDD format, system-generated" },
-  { loop: "ISA", segment: "ISA", element: "ISA10", name: "Interchange Time", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "HHMM format, system-generated" },
+  { loop: "ISA", segment: "ISA", element: "ISA09", name: "Interchange Date", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "YYMMDD format, system-generated", format: { type: "DATE", pattern: "YYMMDD", length: 6, regex: "^\\d{6}$", noFutureDate: true, generated: true } },
+  { loop: "ISA", segment: "ISA", element: "ISA10", name: "Interchange Time", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "HHMM format, system-generated", format: { type: "TIME", pattern: "HHMM", length: 4, regex: "^([01]\\d|2[0-3])[0-5]\\d$", generated: true } },
   { loop: "ISA", segment: "ISA", element: "ISA11", name: "Repetition Separator", usage: "R", values: ["^"], singleValue: true, autoPopulate: true, fileLevel: true, source: "CMS", desc: "^ (caret) for 5010" },
   { loop: "ISA", segment: "ISA", element: "ISA12", name: "Interchange Control Version", usage: "R", values: ["00501"], singleValue: true, autoPopulate: true, fileLevel: true, source: "TR3", desc: "00501 for 5010" },
-  { loop: "ISA", segment: "ISA", element: "ISA13", name: "Interchange Control Number", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "CONFIG", desc: "9-digit, unique 12 months, part of duplicate key" },
+  { loop: "ISA", segment: "ISA", element: "ISA13", name: "Interchange Control Number", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "CONFIG", desc: "9-digit, unique 12 months, part of duplicate key", format: { type: "CONTROL_NUM", pattern: "N9", length: 9, regex: "^\\d{9}$", fixedLength: true, generated: true } },
   { loop: "ISA", segment: "ISA", element: "ISA14", name: "Acknowledgment Requested", usage: "R", values: ["1"], singleValue: true, autoPopulate: true, fileLevel: true, source: "CMS", desc: "1 = Interchange ACK Requested (TA1)" },
   { loop: "ISA", segment: "ISA", element: "ISA15", name: "Usage Indicator", usage: "R", values: ["T", "P"], singleValue: false, autoPopulate: true, fileLevel: true, source: "CONFIG", desc: "T = Test, P = Production" },
   { loop: "ISA", segment: "ISA", element: "ISA16", name: "Component Element Separator", usage: "R", values: [":"], singleValue: true, autoPopulate: true, fileLevel: true, source: "TR3", desc: ": (colon) sub-element separator" },
@@ -45,8 +45,8 @@ export const QUALIFIER_REGISTRY = [
   { loop: "GS", segment: "GS", element: "GS01", name: "Functional Identifier Code", usage: "R", values: ["HC"], singleValue: true, autoPopulate: true, fileLevel: true, source: "TR3", desc: "HC = Health Care" },
   { loop: "GS", segment: "GS", element: "GS02", name: "Application Sender's Code", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "CMS", desc: "Must match ISA06 (EN + Contract ID)" },
   { loop: "GS", segment: "GS", element: "GS03", name: "Application Receiver's Code", usage: "R", values: ["80882"], singleValue: true, autoPopulate: true, fileLevel: true, source: "CMS", desc: "Must match ISA08" },
-  { loop: "GS", segment: "GS", element: "GS04", name: "Date", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "CCYYMMDD, system-generated" },
-  { loop: "GS", segment: "GS", element: "GS05", name: "Time", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "HHMM, system-generated" },
+  { loop: "GS", segment: "GS", element: "GS04", name: "Date", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "CCYYMMDD, system-generated", format: { type: "DATE", pattern: "CCYYMMDD", length: 8, regex: "^\\d{8}$", noFutureDate: true, generated: true } },
+  { loop: "GS", segment: "GS", element: "GS05", name: "Time", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "HHMM or HHMMSSDD, system-generated", format: { type: "TIME", pattern: "HHMM", minLength: 4, maxLength: 8, regex: "^([01]\\d|2[0-3])[0-5]\\d([0-5]\\d\\d{0,2})?$", generated: true } },
   { loop: "GS", segment: "GS", element: "GS06", name: "Group Control Number", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "CONFIG", desc: "Unique, must match GE02, part of duplicate key" },
   { loop: "GS", segment: "GS", element: "GS07", name: "Responsible Agency Code", usage: "R", values: ["X"], singleValue: true, autoPopulate: true, fileLevel: true, source: "TR3", desc: "X = Accredited Standards Committee X12" },
   { loop: "GS", segment: "GS", element: "GS08", name: "Version/Release/Industry ID", usage: "R", values: ["005010X222A1"], singleValue: true, autoPopulate: true, fileLevel: true, source: "CMS", desc: "837P Professional. 837I uses 005010X223A2", claimTypeOverrides: { "837I": "005010X223A2", "DME": "005010X222A1" } },
@@ -68,8 +68,8 @@ export const QUALIFIER_REGISTRY = [
   { loop: "BHT", segment: "BHT", element: "BHT01", name: "Hierarchical Structure Code", usage: "R", values: ["0019"], singleValue: true, autoPopulate: true, fileLevel: true, source: "TR3", desc: "0019 = Information Source, Subscriber, Dependent" },
   { loop: "BHT", segment: "BHT", element: "BHT02", name: "Transaction Set Purpose Code", usage: "R", values: ["00", "18"], singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "00 = Original, 18 = Reissue" },
   { loop: "BHT", segment: "BHT", element: "BHT03", name: "Originator Application Transaction ID", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "CONFIG", desc: "Unique across ALL files, part of duplicate key" },
-  { loop: "BHT", segment: "BHT", element: "BHT04", name: "Transaction Set Creation Date", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "CCYYMMDD, system-generated" },
-  { loop: "BHT", segment: "BHT", element: "BHT05", name: "Transaction Set Creation Time", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "HHMM, system-generated" },
+  { loop: "BHT", segment: "BHT", element: "BHT04", name: "Transaction Set Creation Date", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "CCYYMMDD, system-generated", format: { type: "DATE", pattern: "CCYYMMDD", length: 8, regex: "^\\d{8}$", noFutureDate: true, generated: true } },
+  { loop: "BHT", segment: "BHT", element: "BHT05", name: "Transaction Set Creation Time", usage: "R", values: null, singleValue: false, autoPopulate: true, fileLevel: true, source: "TR3", desc: "HHMM, system-generated", format: { type: "TIME", pattern: "HHMM", minLength: 4, maxLength: 8, regex: "^([01]\\d|2[0-3])[0-5]\\d([0-5]\\d\\d{0,2})?$", generated: true } },
   { loop: "BHT", segment: "BHT", element: "BHT06", name: "Claim or Encounter Identifier", usage: "R", values: ["CH"], singleValue: true, autoPopulate: true, fileLevel: true, source: "CMS", desc: "CH = Chargeable" },
 
   // ── Loop 1000A — Submitter Name (File-Level) ──
@@ -113,6 +113,7 @@ export const QUALIFIER_REGISTRY = [
   { loop: "2010BA", segment: "NM1", element: "NM102", name: "Entity Type Qualifier", usage: "R", values: ["1"], singleValue: true, autoPopulate: true, fileLevel: false, source: "TR3", desc: "1 = Person" },
   { loop: "2010BA", segment: "NM1", element: "NM108", name: "ID Code Qualifier", usage: "R", values: ["MI"], singleValue: true, autoPopulate: true, fileLevel: false, source: "CMS", desc: "MI = Member Identification Number" },
   { loop: "2010BA", segment: "DMG", element: "DMG01", name: "Date Time Period Format Qualifier", usage: "R", values: ["D8"], singleValue: true, autoPopulate: true, fileLevel: false, source: "TR3", desc: "D8 = Date expressed as CCYYMMDD" },
+  { loop: "2010BA", segment: "DMG", element: "DMG02", name: "Subscriber Date of Birth", usage: "R", values: null, singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "Date of birth CCYYMMDD", format: { type: "DATE", pattern: "CCYYMMDD", length: 8, regex: "^\\d{8}$", noFutureDate: true, mustBePast: true, minYear: 1900, dataField: "subscriber.dateOfBirth" } },
   { loop: "2010BA", segment: "DMG", element: "DMG03", name: "Gender Code", usage: "S", values: ["F", "M", "U"], singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "F = Female, M = Male, U = Unknown" },
 
   // ── Loop 2010BB — Payer Name (File-Level CMS defaults) ──
@@ -142,6 +143,7 @@ export const QUALIFIER_REGISTRY = [
   { loop: "2300", segment: "NTE", element: "NTE01", name: "Note Reference Code", usage: "S", values: ["ADD"], singleValue: true, autoPopulate: true, fileLevel: false, source: "CMS", desc: "ADD = Additional Information (for default data)" },
   { loop: "2300", segment: "DTP", element: "DTP01_472", name: "Date/Time Qualifier (Service)", usage: "R", values: ["472"], singleValue: true, autoPopulate: true, fileLevel: false, source: "TR3", desc: "472 = Service" },
   { loop: "2300", segment: "DTP", element: "DTP02", name: "Date Time Period Format Qualifier", usage: "R", values: ["D8", "RD8"], singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "D8 = Date, RD8 = Date Range" },
+  { loop: "2300", segment: "DTP", element: "DTP03_472", name: "Date of Service", usage: "R", values: null, singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "Service date CCYYMMDD or range CCYYMMDD-CCYYMMDD", format: { type: "DATE_OR_RANGE", patternSingle: "CCYYMMDD", patternRange: "CCYYMMDD-CCYYMMDD", regex: "^\\d{8}(-\\d{8})?$", noFutureDate: true, dataField: "claim.serviceDateFrom" } },
   { loop: "2300", segment: "HI", element: "HI01-1", name: "Diagnosis Type Code (Principal)", usage: "R", values: ["ABK", "BK"], singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "ABK = ICD-10-CM Principal, BK = ICD-9 Principal" },
   { loop: "2300", segment: "HI", element: "HI02-1", name: "Diagnosis Type Code (Other)", usage: "S", values: ["ABF", "BF"], singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "ABF = ICD-10-CM Other, BF = ICD-9 Other" },
 
@@ -165,10 +167,12 @@ export const QUALIFIER_REGISTRY = [
   { loop: "2400", segment: "SV1", element: "SV103", name: "Unit or Basis for Measurement", usage: "R", values: ["MJ", "UN", "DA"], singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "MJ=Minutes, UN=Unit, DA=Days" },
   { loop: "2400", segment: "DTP", element: "DTP01", name: "Date/Time Qualifier", usage: "R", values: ["472"], singleValue: true, autoPopulate: true, fileLevel: false, source: "TR3", desc: "472 = Service" },
   { loop: "2400", segment: "DTP", element: "DTP02", name: "Date Time Period Format", usage: "R", values: ["D8", "RD8"], singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "D8 = Date, RD8 = Range" },
+  { loop: "2400", segment: "DTP", element: "DTP03", name: "Line Service Date", usage: "R", values: null, singleValue: false, autoPopulate: false, fileLevel: false, source: "TR3", desc: "Service line date CCYYMMDD or CCYYMMDD-CCYYMMDD", format: { type: "DATE_OR_RANGE", patternSingle: "CCYYMMDD", patternRange: "CCYYMMDD-CCYYMMDD", regex: "^\\d{8}(-\\d{8})?$", noFutureDate: true, dataField: "serviceLine.serviceDateFrom" } },
   { loop: "2400", segment: "CN1", element: "CN101", name: "Contract Type Code (Line)", usage: "S", values: ["05"], singleValue: true, autoPopulate: true, fileLevel: false, source: "CMS", desc: "05 = Capitated line" },
 
   // ── Loop 2430 — Line Adjudication (Data-Dependent) ──
-  { loop: "2430", segment: "DTP", element: "DTP01", name: "Date/Time Qualifier (Adj Date)", usage: "R", values: ["573"], singleValue: true, autoPopulate: true, fileLevel: false, source: "TR3", desc: "573 = Date Claim Paid" }
+  { loop: "2430", segment: "DTP", element: "DTP01", name: "Date/Time Qualifier (Adj Date)", usage: "R", values: ["573"], singleValue: true, autoPopulate: true, fileLevel: false, source: "TR3", desc: "573 = Date Claim Paid" },
+  { loop: "2430", segment: "DTP", element: "DTP03_573", name: "Adjudication/Payment Date", usage: "R", values: null, singleValue: false, autoPopulate: false, fileLevel: false, source: "CMS", desc: "CCYYMMDD. Use receipt date minus 1 day if adj date unavailable", format: { type: "DATE", pattern: "CCYYMMDD", length: 8, regex: "^\\d{8}$", noFutureDate: true, dataField: "adjudicationDate" } }
 ];
 
 
@@ -269,11 +273,212 @@ export function getFieldsByUsage(usage) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4. QUALIFIER VALIDATION ENGINE
-//    Validates a value against the registry
+// 4. DATE/TIME FORMAT RULES
+//    Centralized format definitions referenced by the registry
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function validateQualifier(loop, segment, element, value, claimType) {
+export const FORMAT_RULES = {
+  YYMMDD:   { label: "ISA Date",   length: 6,  regex: /^\d{6}$/,   example: "250324", desc: "YY=year, MM=month, DD=day" },
+  CCYYMMDD: { label: "Full Date",  length: 8,  regex: /^\d{8}$/,   example: "20250324", desc: "CCYY=4-digit year, MM=month, DD=day" },
+  HHMM:     { label: "Time 4-digit", length: 4, regex: /^([01]\d|2[0-3])[0-5]\d$/, example: "1430", desc: "HH=00-23, MM=00-59" },
+  HHMMSSDD: { label: "Time 4-8 digit", minLength: 4, maxLength: 8, regex: /^([01]\d|2[0-3])[0-5]\d([0-5]\d\d{0,2})?$/, example: "14300000", desc: "HHMMSSDD (seconds and hundredths optional)" },
+  DATE_RANGE: { label: "Date Range", regex: /^\d{8}-\d{8}$/, example: "20250301-20250315", desc: "CCYYMMDD-CCYYMMDD" },
+  N9:       { label: "9-digit Numeric", length: 9, regex: /^\d{9}$/, example: "000000001", desc: "Zero-padded 9-digit number" },
+  AN15:     { label: "15-char AlphaNum", length: 15, regex: /^.{15}$/, example: "ENH1234        ", desc: "15 chars, right-space-padded" },
+  ZIP9:     { label: "9-digit ZIP",  length: 9,  regex: /^\d{9}$/,   example: "212441850", desc: "5-digit ZIP + 4-digit suffix" },
+  NPI:      { label: "10-digit NPI", length: 10, regex: /^1\d{9}$/,  example: "1234567890", desc: "Must start with 1, 10 digits" },
+  EIN:      { label: "9-digit EIN",  length: 9,  regex: /^\d{9}$/,   example: "123456789", desc: "9-digit Employer ID Number" },
+  MBI:      { label: "11-char MBI",  length: 11, regex: /^[1-9][A-HJ-KM-NP-RT-Y][0-9A-HJ-KM-NP-RT-Y][0-9][A-HJ-KM-NP-RT-Y][0-9A-HJ-KM-NP-RT-Y][0-9][A-HJ-KM-NP-RT-Y][A-HJ-KM-NP-RT-Y]\d{2}$/, example: "1EG4TE5MK72", desc: "CMS Medicare Beneficiary Identifier" }
+};
+
+/**
+ * Submission timezone configuration.
+ * CMS EDFES processes files in US Eastern time. Dates/times generated
+ * at submission must not be in the future relative to Eastern.
+ */
+export const SUBMISSION_TIMEZONE = {
+  iana: "America/New_York",
+  label: "US Eastern (ET)",
+  utcOffsetStandard: -5,
+  utcOffsetDST: -4,
+  desc: "CMS EDFES operates in Eastern Time. ISA09/10, GS04/05, BHT04/05 must not be future-dated in ET."
+};
+
+/**
+ * Generate current date/time strings in the submission timezone.
+ * Returns an object with all format variants needed for 837 generation.
+ */
+export function generateSubmissionTimestamps(timezone) {
+  const tz = timezone || SUBMISSION_TIMEZONE.iana;
+  const now = new Date();
+
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false
+  });
+  const parts = {};
+  for (const p of fmt.formatToParts(now)) parts[p.type] = p.value;
+
+  const CCYY = parts.year;
+  const MM   = parts.month;
+  const DD   = parts.day;
+  const HH   = parts.hour === "24" ? "00" : parts.hour;
+  const MI   = parts.minute;
+  const SS   = parts.second;
+  const YY   = CCYY.slice(2);
+
+  return {
+    YYMMDD:   `${YY}${MM}${DD}`,
+    CCYYMMDD: `${CCYY}${MM}${DD}`,
+    HHMM:     `${HH}${MI}`,
+    HHMMSS:   `${HH}${MI}${SS}`,
+    timezone:  tz,
+    isoString: now.toISOString(),
+    year: parseInt(CCYY), month: parseInt(MM), day: parseInt(DD),
+    hour: parseInt(HH), minute: parseInt(MI)
+  };
+}
+
+/**
+ * Validate a date string is not in the future relative to submission timezone.
+ * Handles YYMMDD, CCYYMMDD, and CCYYMMDD-CCYYMMDD range formats.
+ */
+export function validateDateNotFuture(dateStr, formatType, timezone) {
+  const ts = generateSubmissionTimestamps(timezone);
+  const todayNum = parseInt(ts.CCYYMMDD);
+
+  if (formatType === "YYMMDD" && /^\d{6}$/.test(dateStr)) {
+    const yy = parseInt(dateStr.slice(0, 2));
+    const fullYear = yy >= 0 && yy <= 49 ? 2000 + yy : 1900 + yy;
+    const full = `${fullYear}${dateStr.slice(2)}`;
+    if (parseInt(full) > todayNum) {
+      return { valid: false, message: `Date ${dateStr} (${full}) is in the future. Current ET date: ${ts.CCYYMMDD}` };
+    }
+  }
+
+  if (formatType === "CCYYMMDD" && /^\d{8}$/.test(dateStr)) {
+    if (parseInt(dateStr) > todayNum) {
+      return { valid: false, message: `Date ${dateStr} is in the future. Current ET date: ${ts.CCYYMMDD}` };
+    }
+  }
+
+  if (formatType === "DATE_OR_RANGE") {
+    const parts = dateStr.split("-");
+    for (const p of parts) {
+      if (/^\d{8}$/.test(p) && parseInt(p) > todayNum) {
+        return { valid: false, message: `Date ${p} in range is in the future. Current ET date: ${ts.CCYYMMDD}` };
+      }
+    }
+    if (parts.length === 2 && parseInt(parts[0]) > parseInt(parts[1])) {
+      return { valid: false, message: `Date range start ${parts[0]} is after end ${parts[1]}` };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate a date is a real calendar date (not Feb 30, etc.)
+ */
+export function validateDateReal(dateStr) {
+  if (!/^\d{8}$/.test(dateStr)) return { valid: false, message: `Not 8 digits: ${dateStr}` };
+  const y = parseInt(dateStr.slice(0, 4));
+  const m = parseInt(dateStr.slice(4, 6));
+  const d = parseInt(dateStr.slice(6, 8));
+  if (m < 1 || m > 12) return { valid: false, message: `Invalid month ${m} in ${dateStr}` };
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || (dt.getUTCMonth() + 1) !== m || dt.getUTCDate() !== d) {
+    return { valid: false, message: `Invalid calendar date: ${dateStr}` };
+  }
+  return { valid: true };
+}
+
+/**
+ * Validate a time is valid (HH 00-23, MM 00-59)
+ */
+export function validateTime(timeStr) {
+  if (!/^([01]\d|2[0-3])[0-5]\d/.test(timeStr)) {
+    return { valid: false, message: `Invalid time format: ${timeStr}. Expected HHMM (00-23)(00-59)` };
+  }
+  return { valid: true };
+}
+
+/**
+ * Comprehensive format validation for a single field.
+ * Uses the format spec from the qualifier registry entry.
+ */
+export function validateFormat(value, formatSpec, timezone) {
+  if (!formatSpec) return { valid: true, message: "No format spec — skip" };
+  const errors = [];
+
+  if (formatSpec.length && value.length !== formatSpec.length) {
+    errors.push(`Expected ${formatSpec.length} chars, got ${value.length}`);
+  }
+  if (formatSpec.fixedLength && value.length !== formatSpec.length) {
+    errors.push(`Fixed length ${formatSpec.length} required, got ${value.length}`);
+  }
+  if (formatSpec.minLength && value.length < formatSpec.minLength) {
+    errors.push(`Min length ${formatSpec.minLength}, got ${value.length}`);
+  }
+  if (formatSpec.maxLength && value.length > formatSpec.maxLength) {
+    errors.push(`Max length ${formatSpec.maxLength}, got ${value.length}`);
+  }
+  if (formatSpec.regex) {
+    const re = typeof formatSpec.regex === "string" ? new RegExp(formatSpec.regex) : formatSpec.regex;
+    if (!re.test(value)) {
+      errors.push(`Pattern mismatch: expected ${formatSpec.pattern || formatSpec.regex}, got '${value}'`);
+    }
+  }
+
+  if (formatSpec.type === "DATE" || formatSpec.type === "DATE_OR_RANGE") {
+    const dates = value.split("-");
+    for (const d of dates) {
+      if (/^\d{8}$/.test(d)) {
+        const realCheck = validateDateReal(d);
+        if (!realCheck.valid) errors.push(realCheck.message);
+      }
+    }
+    if (formatSpec.noFutureDate) {
+      const futureCheck = validateDateNotFuture(value, formatSpec.type === "DATE" ? formatSpec.pattern : "DATE_OR_RANGE", timezone);
+      if (!futureCheck.valid) errors.push(futureCheck.message);
+    }
+    if (formatSpec.mustBePast && /^\d{8}$/.test(value)) {
+      const ts = generateSubmissionTimestamps(timezone);
+      if (parseInt(value) >= parseInt(ts.CCYYMMDD)) {
+        errors.push(`Date ${value} must be in the past (before ${ts.CCYYMMDD})`);
+      }
+    }
+    if (formatSpec.minYear && /^\d{8}$/.test(value)) {
+      const y = parseInt(value.slice(0, 4));
+      if (y < formatSpec.minYear) errors.push(`Year ${y} is before minimum ${formatSpec.minYear}`);
+    }
+  }
+
+  if (formatSpec.type === "TIME") {
+    const timeCheck = validateTime(value);
+    if (!timeCheck.valid) errors.push(timeCheck.message);
+  }
+
+  if (formatSpec.padRight && value.length < formatSpec.length) {
+    // informational: value will be padded
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    message: errors.length === 0 ? "OK" : errors.join("; ")
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. QUALIFIER VALIDATION ENGINE
+//    Validates a value against the registry (extended with format checks)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function validateQualifier(loop, segment, element, value, claimType, timezone) {
   const reg = QUALIFIER_REGISTRY.find(q =>
     q.loop === loop && q.segment === segment && q.element === element
   );
@@ -309,6 +514,18 @@ export function validateQualifier(loop, segment, element, value, claimType) {
     }
   }
 
+  if (reg.format && value) {
+    const fmtResult = validateFormat(value, reg.format, timezone);
+    if (!fmtResult.valid) {
+      return {
+        valid: false,
+        message: `${element} format error: ${fmtResult.message}`,
+        severity: "REJECT",
+        formatErrors: fmtResult.errors
+      };
+    }
+  }
+
   return { valid: true, message: "OK" };
 }
 
@@ -318,13 +535,19 @@ export function validateQualifier(loop, segment, element, value, claimType) {
 //    Returns values that should be auto-filled from config
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function getAutoPopulatedValues(config, claimType) {
+export function getAutoPopulatedValues(config, claimType, timezone) {
   const result = {};
+  const ts = generateSubmissionTimestamps(timezone);
+
   for (const reg of QUALIFIER_REGISTRY) {
     if (!reg.autoPopulate) continue;
     const key = `${reg.loop}.${reg.segment}.${reg.element}`;
 
-    if (reg.singleValue && reg.values && reg.values.length === 1) {
+    if (reg.format && reg.format.generated) {
+      if (reg.format.pattern === "YYMMDD")    result[key] = ts.YYMMDD;
+      else if (reg.format.pattern === "CCYYMMDD") result[key] = ts.CCYYMMDD;
+      else if (reg.format.pattern === "HHMM")     result[key] = ts.HHMM;
+    } else if (reg.singleValue && reg.values && reg.values.length === 1) {
       let val = reg.values[0];
       if (reg.claimTypeOverrides && reg.claimTypeOverrides[claimType]) {
         val = reg.claimTypeOverrides[claimType];
@@ -339,6 +562,8 @@ export function getAutoPopulatedValues(config, claimType) {
       }
     }
   }
+
+  result._timestamps = ts;
   return result;
 }
 
@@ -357,6 +582,11 @@ export function getRegistryStats() {
   const configurable = QUALIFIER_REGISTRY.filter(q => q.source === "CONFIG").length;
   const required = QUALIFIER_REGISTRY.filter(q => q.usage === "R").length;
   const situational = QUALIFIER_REGISTRY.filter(q => q.usage === "S").length;
+  const withFormat = QUALIFIER_REGISTRY.filter(q => q.format).length;
+  const dateFields = QUALIFIER_REGISTRY.filter(q => q.format && (q.format.type === "DATE" || q.format.type === "DATE_OR_RANGE")).length;
+  const timeFields = QUALIFIER_REGISTRY.filter(q => q.format && q.format.type === "TIME").length;
+  const noFutureDateFields = QUALIFIER_REGISTRY.filter(q => q.format && q.format.noFutureDate).length;
+  const generatedFields = QUALIFIER_REGISTRY.filter(q => q.format && q.format.generated).length;
 
   return {
     total,
@@ -368,6 +598,11 @@ export function getRegistryStats() {
     configurable,
     required,
     situational,
-    editLevels: Object.keys(EDIT_LEVELS).length
+    editLevels: Object.keys(EDIT_LEVELS).length,
+    withFormat,
+    dateFields,
+    timeFields,
+    noFutureDateFields,
+    generatedFields
   };
 }

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Encounter Analytics • Invent Health</title>
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topLeft">
+      <div class="topTitle">Encounter Submission Analytics</div>
+      <div class="topSub">837P Professional • Original Encounters • Pipeline Visualization & Business Analytics</div>
+    </div>
+    <div class="topRight">
+      <button class="btn primary" id="btnRunPipeline">Run Pipeline (500 Claims)</button>
+      <div id="pipelineStatus" class="statusBadge"></div>
+    </div>
+  </header>
+
+  <!-- Navigation tabs -->
+  <nav class="tabBar" id="tabBar">
+    <button class="tabBtn active" data-tab="overview">Overview</button>
+    <button class="tabBtn" data-tab="files">Files & 837 Output</button>
+    <button class="tabBtn" data-tab="hierarchy">Hierarchy View</button>
+    <button class="tabBtn" data-tab="providers">Provider Analytics</button>
+    <button class="tabBtn" data-tab="members">Member Analytics</button>
+    <button class="tabBtn" data-tab="trending">Monthly Trending</button>
+    <button class="tabBtn" data-tab="clinical">Clinical Analytics</button>
+    <button class="tabBtn" data-tab="search">Cross-File Search</button>
+    <button class="tabBtn" data-tab="validation">Validation Report</button>
+    <button class="tabBtn" data-tab="pipeline">Pipeline Trace</button>
+  </nav>
+
+  <main class="mainContent" id="mainContent">
+    <!-- Content rendered by app.js -->
+    <div class="empty" style="padding:40px;text-align:center">
+      <div style="font-size:24px;margin-bottom:12px">Click "Run Pipeline" to process 500 sample claims</div>
+      <div class="hint">The pipeline will ingest, validate, and generate 837P EDI files with full analytics</div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" style="display:none"></div>
+  <div class="modal" id="modal" style="display:none">
+    <div class="modalCard">
+      <div class="modalHead">
+        <div class="modalTitle" id="modalTitle">—</div>
+        <button class="btn" id="btnCloseModal">Close</button>
+      </div>
+      <pre class="modalBody" id="modalBody"></pre>
+    </div>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -34,11 +34,13 @@ A standalone app in `claims-search/`. Access at `http://localhost:5501/claims-se
 
 ### Encounter Analytics dashboard & modules
 
-A standalone analytics dashboard in `encounter-analytics/`. Six files — no dependency on the main app:
+A standalone analytics dashboard in `encounter-analytics/`. Eight files — no dependency on the main app:
 
 - `sampleClaims.js` — 500 deterministic sample claims (seeded PRNG) with valid NPIs, MBIs, EINs
 - `pipeline.js` — 6-agent 837P pipeline (ingest → map → validate → template → generate → output-validate)
 - `analyticsEngine.js` — 10 analytics/aggregation functions over pipeline results
+- `dxAnalytics.js` — Dx Analytics Agent: 22-entry condition significance registry, 17 comorbidity gap rules, provider quality scoring, chronic condition gap detection, CPT-Dx association, member profile builder, monthly trending, and `generateMemberHistory()` (2,000 deterministic historical claims)
+- `anomalyTracker.js` — Anomaly lifecycle manager: detect → assign → resolve/defer/reopen workflow, priority calculation, filtered worklist, summary stats, JSON/CSV export
 - `index.html` — Dashboard shell with 10-tab navigation, modal overlay, toast notifications
 - `styles.css` — Executive-level blue/slate theme with KPI cards, CSS bar charts, collapsible tree, sortable tables
 - `app.js` — Full application: Overview, Files & 837 Output, Hierarchy View, Provider Analytics, Member Analytics, Monthly Trending, Clinical Analytics, Cross-File Search, Validation Report, Pipeline Trace
@@ -55,6 +57,23 @@ node --input-type=module -e "
   const r = runPipeline(SAMPLE_CLAIMS);
   console.log(r.summary);
   console.log(getMonthlyTrend(r));
+"
+```
+
+Test the Dx Analytics and Anomaly Tracker modules via Node.js:
+
+```sh
+node --input-type=module -e "
+  import { SAMPLE_CLAIMS } from './encounter-analytics/sampleClaims.js';
+  import { DxAnalyticsAgent, generateMemberHistory } from './encounter-analytics/dxAnalytics.js';
+  import { AnomalyTracker } from './encounter-analytics/anomalyTracker.js';
+  const history = generateMemberHistory(SAMPLE_CLAIMS);
+  const agent = new DxAnalyticsAgent(SAMPLE_CLAIMS, history);
+  const full = agent.getFullAnalytics();
+  console.log('Volume:', full.volume);
+  console.log('Comorbidity gaps:', full.comorbidityGaps.anomalies.length);
+  console.log('Chronic gaps:', full.chronicGaps.length);
+  console.log('Member profiles:', full.memberProfiles.length);
 "
 ```
 

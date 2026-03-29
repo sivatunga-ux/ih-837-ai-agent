@@ -596,20 +596,16 @@ IEA*1*000000001~
 
 ---
 
-## 7. Review Questions for Stakeholders
+## 7. Design Decisions (Finalized)
 
-Before development begins, please confirm:
-
-1. **File-level control numbers** — Should we use a persistent counter (database sequence) or timestamp-based generation for ISA13/GS06/ST02/BHT03?
-
-2. **Multi-claim files** — Should each input file generate one 837 file with multiple CLMs in one ST/SE, or one 837 file per claim?
-
-3. **Paid amount splitting** — When a claim has multiple service lines, should `paidAmount` be split proportionally across SVD segments, or should line-level paid amounts be provided in the input?
-
-4. **Contract ID source** — Is the contract ID always provided in the input file, or should it be a system configuration that applies to all claims in a batch?
-
-5. **Rendering provider** — If not provided in input, should we omit the NM1*82 segment (TR3 allows this) or always require it?
-
-6. **Error threshold** — If a batch has 1000 claims and 5 fail validation, should we generate the 837 for the 995 valid ones and report the 5 failures, or halt the entire batch?
-
-7. **Date timezone** — The spec requires Eastern Time for ISA/GS/BHT dates. Should service dates (DTP*472) also be validated against ET, or are they accepted as-is from the input?
+| # | Decision | Answer |
+|---|----------|--------|
+| 1 | **Control numbers** | DateTime-based: `String(Date.now()).slice(-9)` for ISA13/GS06. `ContractID-timestamp` for BHT03. Globally unique, stateless, no vendor prefix needed. |
+| 2 | **File packaging** | 5,000 CLMs per ST/SE (CMS max). Multiple ST/SE per file. 85,000 encounters/file (FTP). All limits configurable. |
+| 3 | **Paid amount splitting** | Proportional by line charge ratio (`line_charge / total_charge × paid_amount`) if no line-level amounts provided. |
+| 4 | **Contract ID source** | System configuration per MA plan. Overridable per claim in input. Multi-contract ready. |
+| 5 | **Rendering provider** | Copy billing NPI as rendering if not provided in input. |
+| 6 | **Error threshold** | Generate 837 for valid claims. Report failures separately in error queue. Don't halt batch. |
+| 7 | **Service date timezone** | Service dates (DTP*472) accepted as-is from input. Only ISA09/10, GS04/05, BHT04/05 validated against ET. |
+| 8 | **Connectivity** | FTP (free-form, 85K/file). |
+| 9 | **Volume tier** | Medium (5-50K claims/day). |

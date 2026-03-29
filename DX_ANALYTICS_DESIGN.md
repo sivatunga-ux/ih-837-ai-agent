@@ -481,16 +481,16 @@ class ProviderTrendAgent {
 
 ---
 
-## 8. Review Questions
+## 8. Design Decisions (Finalized)
 
-1. **Rule priority** — Should comorbidity rules be pre-loaded (deploy-once) or configurable via a settings UI? I recommend pre-loaded with UI toggle on/off.
-
-2. **Action workflow** — Should anomaly assignments integrate with an external system (Jira, ServiceNow) or stay internal? I recommend internal first with export capability.
-
-3. **Provider scoring** — Should the completeness score be visible to providers or internal-only? This affects how aggressive the scoring algorithm should be.
-
-4. **RAF estimates** — The revenue impact numbers are estimates based on published HCC coefficients. Should we include them in the UI or keep them internal?
-
-5. **Historical depth** — How many months of data should the trending analysis cover? I recommend 12 months rolling.
-
-6. **CPT analytics scope** — Should CPT–Dx association analysis run on every pipeline execution or be a separate on-demand analysis?
+| # | Decision | Answer |
+|---|----------|--------|
+| 1 | **Comorbidity rules** | Pre-loaded with UI toggle on/off per rule. |
+| 2 | **Action workflow** | Internal worklist first. Export (CSV/PDF) capability. External integration (Jira) later. |
+| 3 | **Provider scoring** | Internal-only initially. |
+| 4 | **RAF estimates** | Shown in UI marked "estimated" with disclaimer. |
+| 5 | **Trending depth** | 12 months rolling display. |
+| 6 | **CPT-Dx analysis** | Within pipeline with 24-month member history loaded into DuckDB per batch. |
+| 7 | **Member history depth** | 24 months rolling. |
+| 8 | **Chronic gap flags** | Only for HCC/CDPS/CRG mapped conditions. Configurable per code. |
+| 9 | **Member Dx Profile** | Yes — persistent table (member_id, condition, first_seen, last_seen, times_reported, hcc_category, status). |

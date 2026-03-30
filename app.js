@@ -8,6 +8,14 @@
 import { LOGO_URL, STORE } from "./data/constants.js";
 import { CHANGE_TYPE } from "./data/models.js";
 import { PRO_SAMPLES, INST_SAMPLES } from "./data/samples.js";
+import { MAPPING_837P } from "./data/mapping837P.js";
+import { MAPPING_837I } from "./data/mapping837I.js";
+import { DELIMITER_SPEC, ISA_LAYOUT, SAMPLE_ISA_RAW, detectDelimiters } from "./data/delimiters.js";
+import { runAllTests, runTestsByType } from "./data/testcases837.js";
+import { ClaimsDB, SAMPLE_CLAIMS } from "./data/claimsdb.js";
+import { SAMPLE_CSV, SAMPLE_JSON, SAMPLE_XML } from "./services/claimIngest.js";
+import { ConversionAgent, AGENT_STEPS } from "./services/conversionAgent.js";
+import { getFieldMap } from "./services/claimMapper.js";
 import { applyRepairs, computeStatus, joinSegs, splitSegs, summarize, validate837 } from "./rules/validation.js";
 import { addDocToLibrary as addDocToLibraryService, simulateCCD as simulateCCDService } from "./services/docs.js";
 import {
@@ -834,6 +842,427 @@ function renderRoutingTable() {
   el.innerHTML = table(["Change Type", "Default Route", "Demo Action"], rows);
 }
 
+/* ---------- 837 Map ---------- */
+let currentMapping = MAPPING_837P;
+
+function countMappingStats(mapping) {
+  let loops = mapping.loops.length;
+  let segs = 0;
+  let elems = 0;
+  for (const loop of mapping.loops) {
+    segs += loop.segments.length;
+    for (const seg of loop.segments) {
+      elems += seg.elements.length;
+    }
+  }
+  return { loops, segs, elems };
+}
+
+function renderMapping(mapping, filterText) {
+  currentMapping = mapping;
+  const title = document.getElementById("mapTitle");
+  const desc = document.getElementById("mapDesc");
+  const body = document.getElementById("mapBody");
+  if (!title || !body) return;
+
+  title.textContent = `${mapping.id} — ${mapping.name}`;
+  desc.textContent = mapping.description;
+
+  const filter = (filterText || "").toLowerCase().trim();
+  const stats = countMappingStats(mapping);
+
+  const reqBadge = (r) => {
+    const cls = r === "R" ? "r" : r === "S" ? "s" : "n";
+    const label = r === "R" ? "R" : r === "S" ? "S" : "N";
+    return `<span class="mapReq ${cls}" title="${r === "R" ? "Required" : r === "S" ? "Situational" : "Not Used"}">${label}</span>`;
+  };
+
+  const usageCls = (u) => (u || "").toLowerCase().includes("required") ? "req" : "sit";
+
+  let html = `
+    <input type="text" class="mapSearch" id="mapSearchInput" placeholder="Search segments or elements (e.g., NM1, CLM05, diagnosis)…" value="${esc(filter)}" />
+    <div class="mapStats">
+      <div class="mapStat"><b>${stats.loops}</b> Loops</div>
+      <div class="mapStat"><b>${stats.segs}</b> Segments</div>
+      <div class="mapStat"><b>${stats.elems}</b> Data Elements</div>
+    </div>
+  `;
+
+  for (const loop of mapping.loops) {
+    let loopMatches = false;
+    let segHtmls = "";
+
+    for (const seg of loop.segments) {
+      let segMatches = false;
+      const elemRows = seg.elements.map(el => {
+        const elMatch = !filter ||
+          el.pos.toLowerCase().includes(filter) ||
+          el.name.toLowerCase().includes(filter) ||
+          el.desc.toLowerCase().includes(filter) ||
+          seg.id.toLowerCase().includes(filter);
+        if (elMatch) segMatches = true;
+        return `<tr${!elMatch && filter ? ' style="display:none"' : ""}>
+          <td>${esc(el.pos)}</td>
+          <td>${esc(el.name)}</td>
+          <td>${reqBadge(el.req)}</td>
+          <td><span class="mapTypeTag">${esc(el.type)}</span></td>
+          <td>${esc(el.length)}</td>
+          <td>${esc(el.desc)}</td>
+        </tr>`;
+      }).join("");
+
+      if (!filter) segMatches = true;
+      if (!segMatches && filter && (
+        seg.id.toLowerCase().includes(filter) ||
+        seg.name.toLowerCase().includes(filter)
+      )) segMatches = true;
+
+      if (segMatches) loopMatches = true;
+
+      const openSeg = filter && segMatches;
+      segHtmls += `<div class="mapSeg" ${!segMatches && filter ? 'style="display:none"' : ""}>
+        <div class="mapSegHead${openSeg ? " open" : ""}">
+          <span class="arrow">▶</span>
+          <span class="mapSegId">${esc(seg.id)}</span>
+          <span class="mapSegName">${esc(seg.name)}</span>
+          <span class="mapSegUsage ${usageCls(seg.usage)}">${esc(seg.usage)}</span>
+          ${seg.repeat !== "1" ? `<span class="mapLoopRepeat">×${esc(seg.repeat)}</span>` : ""}
+        </div>
+        <div class="mapSegBody${openSeg ? " open" : ""}">
+          <div class="tableWrap">
+            <table>
+              <thead><tr><th>Element</th><th>Name</th><th>Req</th><th>Type</th><th>Length</th><th>Description</th></tr></thead>
+              <tbody>${elemRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    if (!filter) loopMatches = true;
+    if (!loopMatches && filter && (
+      loop.id.toLowerCase().includes(filter) ||
+      loop.name.toLowerCase().includes(filter)
+    )) loopMatches = true;
+
+    const openLoop = filter && loopMatches;
+    html += `<div class="mapLoop" ${!loopMatches && filter ? 'style="display:none"' : ""}>
+      <div class="mapLoopHead${openLoop ? " open" : ""}">
+        <span class="arrow">▶</span>
+        <span class="mapLoopId">${esc(loop.id)}</span>
+        <span class="mapLoopName">${esc(loop.name)}</span>
+        <span class="mapLoopRepeat">repeat: ${esc(loop.repeat)}</span>
+      </div>
+      <div class="mapLoopBody${openLoop ? " open" : ""}">${segHtmls}</div>
+    </div>`;
+  }
+
+  body.innerHTML = html;
+
+  body.querySelectorAll(".mapLoopHead").forEach(h => {
+    h.onclick = () => {
+      h.classList.toggle("open");
+      h.nextElementSibling.classList.toggle("open");
+    };
+  });
+  body.querySelectorAll(".mapSegHead").forEach(h => {
+    h.onclick = (e) => {
+      e.stopPropagation();
+      h.classList.toggle("open");
+      h.nextElementSibling.classList.toggle("open");
+    };
+  });
+
+  const searchInput = document.getElementById("mapSearchInput");
+  if (searchInput) {
+    let debounce;
+    searchInput.oninput = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => renderMapping(currentMapping, searchInput.value), 200);
+    };
+  }
+}
+
+function mapExpandAll() {
+  document.querySelectorAll(".mapLoopHead").forEach(h => { h.classList.add("open"); h.nextElementSibling.classList.add("open"); });
+  document.querySelectorAll(".mapSegHead").forEach(h => { h.classList.add("open"); h.nextElementSibling.classList.add("open"); });
+}
+function mapCollapseAll() {
+  document.querySelectorAll(".mapLoopHead").forEach(h => { h.classList.remove("open"); h.nextElementSibling.classList.remove("open"); });
+  document.querySelectorAll(".mapSegHead").forEach(h => { h.classList.remove("open"); h.nextElementSibling.classList.remove("open"); });
+}
+
+/* ---------- Delimiter Config ---------- */
+function renderDelimiterConfig() {
+  const el = document.getElementById("delimiterBody");
+  if (!el) return;
+
+  let html = `<div class="delimGrid">`;
+
+  for (const d of DELIMITER_SPEC) {
+    html += `
+      <div class="delimCard">
+        <div class="delimSymbol">${esc(d.symbol)}</div>
+        <div class="delimInfo">
+          <div class="delimName">${esc(d.name)}</div>
+          <div class="delimPurpose">${esc(d.purpose)}</div>
+          <div class="delimMeta"><b>ISA Position:</b> ${esc(d.isaPosition)}</div>
+          <div class="delimMeta"><b>Example:</b> <code>${d.exampleHighlight}</code></div>
+          <div class="delimNote">${esc(d.notes)}</div>
+        </div>
+      </div>`;
+  }
+  html += `</div>`;
+
+  html += `<h3 class="mt16">ISA Segment Layout (106 characters)</h3>
+    <div class="hint" style="margin-bottom:10px">${esc(ISA_LAYOUT.description)}</div>
+    <div class="tableWrap"><table><thead><tr><th>Pos</th><th>Field</th><th>Description</th></tr></thead><tbody>`;
+
+  for (const p of ISA_LAYOUT.positions) {
+    const cls = p.delimiter ? ' style="background:rgba(47,102,224,.08);font-weight:900"' : "";
+    html += `<tr${cls}>
+      <td style="font-family:var(--mono);white-space:nowrap">${esc(p.range)}</td>
+      <td style="font-weight:800">${esc(p.label)}</td>
+      <td>${esc(p.desc)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  html += `<h3 class="mt16">Live Delimiter Detection</h3>
+    <div class="hint" style="margin-bottom:8px">Paste an ISA header (or full 837 file) to auto-detect its delimiters.</div>
+    <textarea id="delimInput" class="textarea" rows="3" placeholder="Paste ISA segment here…" style="font-family:var(--mono);font-size:12px">${esc(SAMPLE_ISA_RAW)}</textarea>
+    <div class="row mt8">
+      <button class="btn primary" id="btnDetectDelim">Detect Delimiters</button>
+    </div>
+    <div id="delimDetectResult" class="mt12"></div>`;
+
+  el.innerHTML = html;
+
+  document.getElementById("btnDetectDelim").onclick = () => {
+    const input = document.getElementById("delimInput").value;
+    const result = detectDelimiters(input);
+    const resEl = document.getElementById("delimDetectResult");
+    let rhtml = `<div class="delimGrid">`;
+    const items = [
+      { label: "Element Separator", val: result.element },
+      { label: "Sub-Element Separator", val: result.subElement },
+      { label: "Segment Terminator", val: result.segment },
+      { label: "Repetition Separator", val: result.repetition }
+    ];
+    for (const it of items) {
+      rhtml += `<div class="delimResultItem"><span class="delimSymbol" style="font-size:18px">${esc(it.val)}</span><span>${esc(it.label)}</span></div>`;
+    }
+    rhtml += `</div>`;
+    if (result.detected) {
+      rhtml += `<div class="testPass mt8" style="padding:8px 12px;border-radius:10px">Delimiters successfully detected from ISA header.</div>`;
+    } else {
+      rhtml += `<div class="testFail mt8" style="padding:8px 12px;border-radius:10px">Could not detect from ISA — using defaults.</div>`;
+    }
+    for (const e of result.errors) {
+      rhtml += `<div class="testWarn mt8" style="padding:6px 12px;border-radius:8px;font-size:12px">${esc(e)}</div>`;
+    }
+    resEl.innerHTML = rhtml;
+  };
+}
+
+/* ---------- Test Runner ---------- */
+function renderTestResults(results) {
+  const el = document.getElementById("testResultsBody");
+  if (!el) return;
+
+  const total = results.length;
+  const passed = results.filter(r => r.pass).length;
+  const failed = total - passed;
+
+  let html = `
+    <div class="mapStats" style="margin-bottom:14px">
+      <div class="mapStat"><b>${total}</b> Total</div>
+      <div class="mapStat" style="border-color:#22c55e"><b style="color:#16a34a">${passed}</b> Passed</div>
+      ${failed ? `<div class="mapStat" style="border-color:#ef4444"><b style="color:#dc2626">${failed}</b> Failed</div>` : ""}
+    </div>`;
+
+  for (const r of results) {
+    const icon = r.pass ? "✅" : "❌";
+    const cls = r.pass ? "testPass" : "testFail";
+
+    let checksHtml = "";
+    for (const c of r.checks) {
+      const cIcon = c.ok ? "✅" : "❌";
+      const actual = typeof c.actual === "object" ? JSON.stringify(c.actual) : String(c.actual);
+      const expected = typeof c.expected === "object" ? JSON.stringify(c.expected) : String(c.expected);
+      checksHtml += `<tr class="${c.ok ? "" : "testFailRow"}">
+        <td>${cIcon}</td>
+        <td style="font-weight:700">${esc(c.label)}</td>
+        <td style="font-family:var(--mono);font-size:11px">${esc(expected)}</td>
+        <td style="font-family:var(--mono);font-size:11px">${esc(actual)}</td>
+      </tr>`;
+    }
+
+    html += `<div class="testCase ${cls}">
+      <div class="testCaseHead">
+        <span>${icon}</span>
+        <span class="testCaseId">${esc(r.id)}</span>
+        <span class="testCaseType">${esc(r.type)}</span>
+        <span class="testCaseName">${esc(r.name)}</span>
+      </div>
+      <div class="testCaseBody">
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th></th><th>Check</th><th>Expected</th><th>Actual</th></tr></thead>
+            <tbody>${checksHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+
+  el.querySelectorAll(".testCaseHead").forEach(h => {
+    h.onclick = () => {
+      h.parentElement.classList.toggle("expanded");
+    };
+  });
+}
+
+/* ---------- 837 Generator Agent ---------- */
+const claimsDb = new ClaimsDB();
+let lastEdiOutput = "";
+let lastPipelineResults = null;
+
+function renderGenDbBrowser() {
+  const statsEl = document.getElementById("genDbStats");
+  const bodyEl = document.getElementById("genDbBody");
+  if (!statsEl || !bodyEl) return;
+
+  const stats = claimsDb.getStats();
+  statsEl.textContent = `${stats.claims} claims • ${stats.serviceLines} service lines • ${stats.diagnoses} diagnoses`;
+
+  const claims = claimsDb.getAllClaims();
+  if (!claims.length) {
+    bodyEl.innerHTML = `<div class="empty">No claims stored yet. Load claims via the agent pipeline above.</div>`;
+    return;
+  }
+
+  let html = "";
+  for (const c of claims.slice(0, 50)) {
+    const sub = claimsDb.getFullClaim(c.id);
+    const name = sub?.subscriber ? `${sub.subscriber.lastName || ""}, ${sub.subscriber.firstName || ""}` : c.patientControlNumber;
+    html += `<div class="claimRow" data-claimid="${c.id}">
+      <span class="claimRowType">${esc(c.claimType || "837P")}</span>
+      <span class="claimRowId">${esc(c.patientControlNumber || c.id)}</span>
+      <span class="claimRowName">${esc(name)} • $${esc(String(c.totalChargeAmount || 0))}</span>
+      <span class="claimRowStatus ${esc(c.status || "DRAFT")}">${esc(c.status || "DRAFT")}</span>
+    </div>`;
+  }
+  bodyEl.innerHTML = html;
+
+  bodyEl.querySelectorAll(".claimRow").forEach(row => {
+    row.onclick = () => {
+      const id = row.getAttribute("data-claimid");
+      const full = claimsDb.getFullClaim(id);
+      if (full) openModal("Claim Detail: " + (full.patientControlNumber || id), JSON.stringify(full, null, 2));
+    };
+  });
+}
+
+function renderAgentPipeline(steps) {
+  const el = document.getElementById("genPipelineBody");
+  if (!el) return;
+
+  let html = "";
+  for (const step of steps) {
+    const icon = step.status === "success" ? "✅" :
+                 step.status === "warning" ? "⚠️" :
+                 step.status === "error" ? "❌" :
+                 step.status === "running" ? "⏳" : "⬜";
+    const cls = step.status || "pending";
+    const time = step.duration != null ? `${step.duration}ms` : "";
+    html += `<div class="agentStep ${cls}">
+      <span class="agentStepIcon">${icon}</span>
+      <div class="agentStepInfo">
+        <div class="agentStepName">${esc(step.name || step.stepId)}</div>
+        <div class="agentStepMsg">${esc(step.message || step.desc || "")}</div>
+      </div>
+      <span class="agentStepTime">${esc(time)}</span>
+    </div>`;
+  }
+
+  if (lastPipelineResults?.summary) {
+    const s = lastPipelineResults.summary;
+    html += `<div class="agentSummary">
+      <div style="font-weight:900;margin-bottom:8px">Pipeline Summary</div>
+      <div class="hint">Claims processed: <b>${s.claimsProcessed || 0}</b> • Errors: <b>${s.errors || 0}</b> • EDI segments: <b>${s.ediSegments || 0}</b> • Total time: <b>${s.totalDuration || 0}ms</b></div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function renderFieldMap(claimType) {
+  const el = document.getElementById("genFieldMapBody");
+  if (!el) return;
+  const map = getFieldMap(claimType);
+  if (!map) { el.innerHTML = `<div class="empty">No field map for ${claimType}</div>`; return; }
+
+  let html = "";
+  for (const [section, fields] of Object.entries(map)) {
+    html += `<h3 class="mt12" style="text-transform:capitalize">${esc(section)}</h3>`;
+    html += `<div class="tableWrap mt8"><table class="fieldMapTable"><thead><tr><th>DB Field</th><th>EDI Segment</th><th>EDI Element</th><th>Default</th></tr></thead><tbody>`;
+    for (const f of fields) {
+      html += `<tr>
+        <td>${esc(f.dbField)}</td>
+        <td>${esc(f.ediSegment)}</td>
+        <td>${esc(f.ediElement)}</td>
+        <td>${esc(f.default || "")}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function runGeneratorAgent() {
+  const fileText = document.getElementById("genInputText")?.value || "";
+  const claimType = document.getElementById("genClaimType")?.value || "837P";
+  const ediOut = document.getElementById("genEdiOutput");
+  const dlBtn = document.getElementById("btnGenDownload");
+  const copyBtn = document.getElementById("btnGenCopyEDI");
+  const sendBtn = document.getElementById("btnGenSendToValidator");
+
+  if (!fileText.trim()) { toast("Paste or load claim data first."); return; }
+
+  const pendingSteps = AGENT_STEPS.map(s => ({ ...s, status: "pending" }));
+  renderAgentPipeline(pendingSteps);
+
+  const agent = new ConversionAgent(claimsDb);
+  const results = await agent.runPipeline(fileText, "input_file", claimType, {});
+  lastPipelineResults = results;
+
+  renderAgentPipeline(results.steps);
+  renderGenDbBrowser();
+
+  if (results.ediOutput) {
+    lastEdiOutput = results.ediOutput;
+    ediOut.textContent = results.ediOutput;
+    dlBtn.disabled = false;
+    copyBtn.disabled = false;
+    sendBtn.disabled = false;
+
+    addAudit("837_GENERATED", {
+      claimType,
+      claims: results.claims?.length || 0,
+      segments: results.summary?.ediSegments || 0,
+      errors: results.errors?.length || 0
+    });
+    addNotif("837 Generated", `Generated ${claimType} EDI with ${results.summary?.ediSegments || 0} segments.`);
+    toast("837 EDI generated successfully");
+  } else {
+    ediOut.textContent = "Generation failed.\n\nErrors:\n" + (results.errors || []).join("\n");
+    toast("Generation failed — see errors");
+  }
+}
+
 /* ---------- Tabs ---------- */
 function setTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -846,6 +1275,13 @@ function setTab(name) {
     renderRAFImpact();
     renderErrorBreakdown();
     renderProviderQuerySamples();
+  }
+  if (name === "mapping") {
+    renderDelimiterConfig();
+    renderMapping(currentMapping, document.getElementById("mapSearchInput")?.value || "");
+  }
+  if (name === "generator") {
+    renderGenDbBrowser();
   }
 }
 
@@ -955,6 +1391,82 @@ function wireUI() {
     renderLibrary();
   };
 
+  document.getElementById("btnMapPro").onclick = () => { renderMapping(MAPPING_837P); };
+  document.getElementById("btnMapInst").onclick = () => { renderMapping(MAPPING_837I); };
+  document.getElementById("btnMapExpandAll").onclick = mapExpandAll;
+  document.getElementById("btnMapCollapseAll").onclick = mapCollapseAll;
+
+  // 837 Generator wiring
+  document.getElementById("btnGenLoadCSV").onclick = () => {
+    document.getElementById("genInputText").value = SAMPLE_CSV;
+    toast("Sample CSV loaded");
+  };
+  document.getElementById("btnGenLoadJSON").onclick = () => {
+    document.getElementById("genInputText").value = SAMPLE_JSON;
+    toast("Sample JSON loaded");
+  };
+  document.getElementById("btnGenLoadXML").onclick = () => {
+    document.getElementById("genInputText").value = SAMPLE_XML;
+    toast("Sample XML loaded");
+  };
+  document.getElementById("genFileInput").onchange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const text = await new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ""));
+      r.readAsText(files[0]);
+    });
+    document.getElementById("genInputText").value = text;
+    toast(`Loaded ${files[0].name}`);
+    e.target.value = "";
+  };
+  document.getElementById("btnGenRunAgent").onclick = runGeneratorAgent;
+  document.getElementById("btnGenClearDB").onclick = () => {
+    claimsDb.clearAll();
+    renderGenDbBrowser();
+    document.getElementById("genEdiOutput").textContent = "No EDI output yet.";
+    document.getElementById("btnGenDownload").disabled = true;
+    document.getElementById("btnGenCopyEDI").disabled = true;
+    document.getElementById("btnGenSendToValidator").disabled = true;
+    lastEdiOutput = "";
+    lastPipelineResults = null;
+    document.getElementById("genPipelineBody").innerHTML = `<div class="empty">Run the agent to see the pipeline trace.</div>`;
+    toast("Claims DB cleared");
+  };
+  document.getElementById("btnGenDownload").onclick = () => {
+    if (!lastEdiOutput) return;
+    const blob = new Blob([lastEdiOutput], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ct = document.getElementById("genClaimType")?.value || "837P";
+    a.download = `generated_${ct}_${Date.now()}.edi`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 400);
+    toast("EDI file downloaded");
+  };
+  document.getElementById("btnGenCopyEDI").onclick = async () => {
+    if (!lastEdiOutput) return;
+    try { await navigator.clipboard.writeText(lastEdiOutput); toast("EDI copied to clipboard"); }
+    catch { toast("Copy failed"); }
+  };
+  document.getElementById("btnGenSendToValidator").onclick = () => {
+    if (!lastEdiOutput) return;
+    loadedInputs = [{ name: "generated_837.edi", text: lastEdiOutput }];
+    saveJSON(STORE.loaded, loadedInputs);
+    toast("Sent to validator — switch to 837 Ingestion tab");
+    setTab("ingestion");
+    renderLoaded();
+  };
+  document.getElementById("btnShowMapP").onclick = () => renderFieldMap("837P");
+  document.getElementById("btnShowMapI").onclick = () => renderFieldMap("837I");
+
+  document.getElementById("btnRunAllTests").onclick = () => renderTestResults(runAllTests());
+  document.getElementById("btnRunProTests").onclick = () => renderTestResults(runTestsByType("837P"));
+  document.getElementById("btnRunInstTests").onclick = () => renderTestResults(runTestsByType("837I"));
+  document.getElementById("btnRunDelimTests").onclick = () => renderTestResults(runTestsByType("Delimiter"));
+
   document.getElementById("btnSimulateCCD").onclick = () => {
     const memberId = (document.getElementById("docMemberId").value || "").trim() || "UNKNOWN";
     const ccd = simulateCCDService(memberId, uid);
@@ -988,7 +1500,15 @@ function renderAll() {
 }
 
 /* ---------- Init ---------- */
-document.addEventListener("DOMContentLoaded", () => {
+function initApp() {
   wireUI();
   renderAll();
-});
+}
+
+// Handle both cases: module loads before or after DOMContentLoaded
+if (document.readyState === 'loading') {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  // DOM already loaded, init immediately
+  initApp();
+}

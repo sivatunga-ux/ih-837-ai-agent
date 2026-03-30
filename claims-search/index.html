@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Claims Search • Invent Health</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topTitle">
+      <div class="topTitleMain">Claims Search</div>
+      <div class="topTitleSub">Search across members, providers, claims, diagnoses — Prototype</div>
+    </div>
+    <div class="topRight">
+      <div id="stats" class="statsBadge"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Left: Search Panel -->
+    <aside class="searchPanel" id="searchPanel"></aside>
+
+    <!-- Main: Results -->
+    <main class="resultsArea">
+      <div class="resultsHeader" id="resultsHeader"></div>
+      <div class="facetsBar" id="facetsBar"></div>
+      <div class="resultsBody" id="resultsBody"></div>
+      <div class="pagination" id="pagination"></div>
+    </main>
+
+    <!-- Right: Detail Panel -->
+    <aside class="detailPanel" id="detailPanel">
+      <div class="detailEmpty">Select a claim to view details</div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" style="display:none"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

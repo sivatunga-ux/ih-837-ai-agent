@@ -60,6 +60,16 @@
           <span class="navIcon">📊</span>
           <span>Reports</span>
         </button>
+
+        <button class="navItem tab" data-tab="mapping">
+          <span class="navIcon">🗺️</span>
+          <span>837 Map</span>
+        </button>
+
+        <button class="navItem tab" data-tab="generator">
+          <span class="navIcon">🤖</span>
+          <span>837 Generator</span>
+        </button>
       </div>
 
       <div class="navGroup">
@@ -393,6 +403,151 @@
             <div class="hint">Examples for missing documentation / suspected status codes</div>
           </div>
           <div class="cardBody" id="providerQuerySamples"></div>
+        </div>
+      </section>
+
+      <!-- 837 MAP -->
+      <section class="tabPane" id="tab-mapping">
+        <div class="pageHeader">
+          <div>
+            <h1>837 File Mapping</h1>
+            <p class="sub">Complete segment and data-element reference for 837P (Professional) and 837I (Institutional) per ASC X12N 005010.</p>
+          </div>
+          <div class="pageActions">
+            <button class="btn" id="btnMapPro">837P Professional</button>
+            <button class="btn" id="btnMapInst">837I Institutional</button>
+            <button class="btn" id="btnMapExpandAll">Expand All</button>
+            <button class="btn" id="btnMapCollapseAll">Collapse All</button>
+          </div>
+        </div>
+
+        <!-- Delimiter Configuration -->
+        <div class="card">
+          <div class="cardHead">
+            <h2>X12 Delimiter Configuration</h2>
+            <div class="hint">In X12 EDI, delimiters are self-describing — defined by the ISA header itself. Every file declares its own delimiters in the first 106 characters.</div>
+          </div>
+          <div class="cardBody" id="delimiterBody"></div>
+        </div>
+
+        <!-- Test Cases -->
+        <div class="card mt16">
+          <div class="cardHead">
+            <h2>Mapping Validation Test Cases</h2>
+            <div class="pillRow">
+              <button class="btn primary" id="btnRunAllTests">Run All Tests</button>
+              <button class="btn" id="btnRunProTests">837P Tests</button>
+              <button class="btn" id="btnRunInstTests">837I Tests</button>
+              <button class="btn" id="btnRunDelimTests">Delimiter Tests</button>
+            </div>
+          </div>
+          <div class="cardBody" id="testResultsBody">
+            <div class="hint">Click "Run All Tests" to execute the validation test suite against the mapping extractors and delimiter detection.</div>
+          </div>
+        </div>
+
+        <!-- Segment / Element Map -->
+        <div class="card mt16">
+          <div class="cardHead">
+            <h2 id="mapTitle">837P — Professional (005010X222A1)</h2>
+            <div class="hint" id="mapDesc">Health Care Claim: Professional — used by physicians, therapists, outpatient clinics, and other non-institutional providers.</div>
+          </div>
+          <div class="cardBody" id="mapBody">
+            <div class="hint">Select a mapping type above to view its loop/segment/element hierarchy.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 837 GENERATOR -->
+      <section class="tabPane" id="tab-generator">
+        <div class="pageHeader">
+          <div>
+            <h1>837 Generator Agent</h1>
+            <p class="sub">Load claims from CSV, JSON, or XML → store in claims database → convert to 837P/I EDI format. Agentic pipeline with step-by-step trace.</p>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <!-- Left: Input / Ingest -->
+          <div>
+            <div class="card">
+              <div class="cardHead">
+                <h2>1. Load Claim Data</h2>
+                <div class="hint">Upload a file or load sample data (CSV, JSON, XML)</div>
+              </div>
+              <div class="cardBody">
+                <div class="row">
+                  <select id="genClaimType" class="select" style="max-width:180px">
+                    <option value="837P">837P Professional</option>
+                    <option value="837I">837I Institutional</option>
+                  </select>
+                  <input type="file" id="genFileInput" accept=".csv,.json,.xml,.txt,.edi" />
+                </div>
+                <div class="row mt8">
+                  <button class="btn" id="btnGenLoadCSV">Load Sample CSV</button>
+                  <button class="btn" id="btnGenLoadJSON">Load Sample JSON</button>
+                  <button class="btn" id="btnGenLoadXML">Load Sample XML</button>
+                </div>
+                <textarea id="genInputText" class="textarea mt8" rows="8" placeholder="Paste claim data here (CSV, JSON, or XML)…" style="font-family:var(--mono);font-size:11px"></textarea>
+                <div class="row mt8">
+                  <button class="btn primary" id="btnGenRunAgent">Run Agent Pipeline</button>
+                  <button class="btn" id="btnGenClearDB">Clear Claims DB</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Claims DB Browser -->
+            <div class="card mt16">
+              <div class="cardHead">
+                <h2>Claims Database</h2>
+                <div class="hint" id="genDbStats">No claims stored yet.</div>
+              </div>
+              <div class="cardBody" id="genDbBody">
+                <div class="empty">Load claims via the agent pipeline above.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Agent Pipeline + Output -->
+          <div>
+            <div class="card">
+              <div class="cardHead">
+                <h2>2. Agent Pipeline</h2>
+                <div class="hint">Step-by-step conversion trace</div>
+              </div>
+              <div class="cardBody" id="genPipelineBody">
+                <div class="empty">Run the agent to see the pipeline trace.</div>
+              </div>
+            </div>
+
+            <div class="card mt16">
+              <div class="cardHead">
+                <h2>3. 837 EDI Output</h2>
+                <div class="pillRow">
+                  <button class="btn" id="btnGenDownload" disabled>Download 837</button>
+                  <button class="btn" id="btnGenCopyEDI" disabled>Copy to Clipboard</button>
+                  <button class="btn" id="btnGenSendToValidator" disabled>Send to Validator</button>
+                </div>
+              </div>
+              <div class="cardBody">
+                <pre class="codeBox" id="genEdiOutput" style="max-height:400px">No EDI output yet. Run the agent pipeline to generate.</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Mapping Reference -->
+        <div class="card mt16">
+          <div class="cardHead">
+            <h2>Claims DB → 837 Field Mapping</h2>
+            <div class="pillRow">
+              <button class="btn" id="btnShowMapP">837P Mapping</button>
+              <button class="btn" id="btnShowMapI">837I Mapping</button>
+            </div>
+          </div>
+          <div class="cardBody" id="genFieldMapBody">
+            <div class="hint">Click a mapping button to see the claims DB → EDI field reference.</div>
+          </div>
         </div>
       </section>
 
